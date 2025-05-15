@@ -1,0 +1,27 @@
+# Path: ansible/roles/openwebui/templates/backup-appdata.sh.j2
+---
+#!/bin/bash
+# OpenWebUI Application Data Backup
+
+# Configuration
+BACKUP_DIR="{{ openwebui_backup_dir }}"
+RETENTION_DAYS={{ openwebui_backup_retention_days }}
+DATE=$(date +%Y%m%d)
+VOLUME_NAME="{{ openwebui_data_volume }}"
+
+# Ensure backup directory exists
+mkdir -p $BACKUP_DIR
+
+echo "$(date): Starting OpenWebUI application data backup"
+
+# Backup application data
+echo "Creating application data backup..."
+docker run --rm -v $VOLUME_NAME:/source -v $BACKUP_DIR:/backup alpine \
+  tar -czf /backup/openwebui-data-$DATE.tar.gz -C /source .
+
+# Cleanup old backups
+echo "Cleaning up backups older than $RETENTION_DAYS days..."
+find $BACKUP_DIR -name "openwebui-data-*.tar.gz" -mtime +$RETENTION_DAYS -delete
+
+echo "$(date): OpenWebUI application data backup completed"
+exit 0

@@ -1,0 +1,55 @@
+# Path: ansible/roles/openwebui/templates/connection_test.sh.j2
+---
+#!/bin/bash
+# Basic connectivity tests for OpenWebUI
+
+# Configuration
+OPENWEBUI_URL="{{ openwebui_url }}"
+POSTGRES_CONTAINER="{{ openwebui_postgres_container }}"
+OPENWEBUI_CONTAINER="{{ openwebui_container }}"
+
+echo "Starting OpenWebUI connectivity tests at $(date)"
+echo "----------------------------------------"
+
+# Test PostgreSQL container
+echo "Testing PostgreSQL container..."
+if docker container inspect $POSTGRES_CONTAINER &>/dev/null; then
+  echo "✅ PostgreSQL container exists"
+else
+  echo "❌ PostgreSQL container does not exist"
+  exit 1
+fi
+
+# Test PostgreSQL connectivity from OpenWebUI container
+echo "Testing database connectivity..."
+if docker exec $OPENWEBUI_CONTAINER pg_isready -h postgres -U {{ openwebui_db_user }}; then
+  echo "✅ Database connection successful"
+else
+  echo "❌ Database connection failed"
+  exit 1
+fi
+
+# Test OpenWebUI container
+echo "Testing OpenWebUI container..."
+if docker container inspect $OPENWEBUI_CONTAINER &>/dev/null; then
+  echo "✅ OpenWebUI container exists"
+else
+  echo "❌ OpenWebUI container does not exist"
+  exit 1
+fi
+
+# Test OpenWebUI HTTP response
+echo "Testing OpenWebUI HTTP response..."
+status_code=$(curl -s -o /dev/null -w "%{http_code}" $OPENWEBUI_URL)
+if [[ $status_code -eq 200 || $status_code -eq 302 ]]; then
+  echo "✅ OpenWebUI HTTP response successful (HTTP $status_code)"
+else
+  echo "❌ OpenWebUI HTTP response failed (HTTP $status_code)"
+  exit 1
+fi
+
+echo "----------------------------------------"
+echo "All connectivity tests passed at $(date)"
+exit 0
+
+#

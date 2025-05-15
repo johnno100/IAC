@@ -1,0 +1,47 @@
+# Path: ansible/roles/traefik/templates/docker-compose.yml.j2
+---
+version: '3'
+
+services:
+  traefik:
+    image: traefik:{{ traefik_version }}
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "{{ traefik_http_port }}:80"
+      - "{{ traefik_https_port }}:443"
+{% if traefik_dashboard_enabled and traefik_api_insecure %}
+      - "{{ traefik_dashboard_port }}:8080"
+{% endif %}
+    volumes:
+      - {{ traefik_config_dir }}/traefik.yml:/etc/traefik/traefik.yml:ro
+      - {{ traefik_config_dir }}/dynamic:/etc/traefik/dynamic:ro
+      - {{ traefik_certs_dir }}:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - {{ traefik_network }}
+    labels:
+      - "traefik.enable=true"
+{% if traefik_dashboard_enabled and not traefik_api_insecure %}
+      - "traefik.http.routers.traefik.rule=Host(`{{ traefik_dashboard_domain }}`)"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+{% if traefik_dashboard_auth_enabled %}
+      - "traefik.http.routers.traefik.middlewares=traefik-auth"
+      - "traefik.http.middlewares.traefik-auth.basicauth.users={{ traefik_dashboard_users | join(',') }}"
+{% endif %}
+{% endif %}
+      - "traefik.http.middlewares.default-headers.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.default-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.default-headers.headers.frameDeny=true"
+      - "traefik.http.middlewares.default-headers.headers.sslRedirect=true"
+      - "traefik.http.middlewares.default-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.default-headers.headers.stsPreload=true"
+      - "traefik.http.middlewares.default-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.default-headers.headers.customFrameOptionsValue=SAMEORIGIN"
+
+networks:
+  {{ traefik_network }}:
+    external: true
+

@@ -1,0 +1,102 @@
+---
+# Example Ansible role structure for Authentik
+# Path: ansible/roles/authentik/tasks/main.yml
+
+- name: Check if Authentik is already deployed
+  stat:
+    path: "{{ authentik_config_dir }}/docker-compose.yml"
+  register: authentik_compose_file
+
+- name: Create directories for Authentik
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ authentik_config_dir }}"
+    - "{{ authentik_custom_templates_dir }}"
+    - "{{ authentik_media_dir }}"
+    - "{{ authentik_certs_dir }}"
+    - "{{ authentik_backups_dir }}"
+
+- name: Generate secure secret key if not provided
+  set_fact:
+    authentik_secret_key: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=50') }}"
+  when: authentik_secret_key is not defined or authentik_secret_key == ""
+
+- name: Create Authentik environment file
+  template:
+    src: env.j2
+    dest: "{{ authentik_config_dir }}/.env"
+    mode: '0600'
+  notify: Restart Authentik
+
+- name: Create Docker Compose file for Authentik
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ authentik_config_dir }}/docker-compose.yml"
+    mode: '0644'
+  notify: Restart Authentik
+
+- name: Create Authentik setup script
+  template:
+    src: setup-authentik.sh.j2
+    dest: "{{ authentik_config_dir }}/setup-authentik.sh"
+    mode: '0755'
+
+- name: Ensure required Docker volumes exist
+  docker_volume:
+    name: "{{ item }}"
+  loop:
+    - "{{ authentik_db_volume }}"
+    - "{{ authentik_media_volume }}"
+    - "{{ authentik_certs_volume }}"
+    - "{{ authentik_templates_volume }}"
+
+- name: Deploy Authentik using Docker Compose
+  community.docker.docker_compose:
+    project_src: "{{ authentik_config_dir }}"
+    build: no
+    state: present
+  register: authentik_deploy_result
+
+- name: Wait for Authentik server to be ready
+  uri:
+    url: "https://{{ authentik_domain }}/api/v3/admin/overview/"
+    validate_certs: "{{ authentik_validate_certs }}"
+    status_code: 200
+    headers:
+      Authorization: "Bearer {{ authentik_admin_token }}"
+  register: authentik_health_check
+  until: authentik_health_check.status == 200
+  retries: 30
+  delay: 10
+  ignore_errors: true
+  when: authentik_deploy_result.changed
+
+- name: Configure Traefik Forward Auth integration
+  when: authentik_traefik_integration | bool
+  block:
+    - name: Create Traefik middleware configuration
+      template:
+        src: traefik-middleware.toml.j2
+        dest: "{{ traefik_config_dir }}/conf.d/authentik-middleware.toml"
+        mode: '0644'
+      notify: Restart Traefik
+      when: traefik_config_dir is defined
+
+- name: Run initial setup script if first deployment
+  command: "{{ authentik_config_dir }}/setup-authentik.sh"
+  when: authentik_deploy_result.changed
+
+- name: Display Authentik access information
+  debug:
+    msg: |
+      Authentik has been deployed successfully!
+      
+      Access URL: https://{{ authentik_domain }}
+      Admin email: {{ authentik_admin_email }}
+      
+      Please make sure your DNS records are properly configured to point
+      {{ authentik_domain }} to your server's IP address.
+

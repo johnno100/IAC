@@ -1,0 +1,8 @@
+# Path: ansible/roles/openwebui/handlers/main.yml
+---
+
+- name: Restart OpenWebUI
+  community.docker.docker_compose:
+    project_src: "{{ openwebui_config_dir }}"
+    restarted: yes
+  ignore_errors: true

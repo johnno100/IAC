@@ -1,0 +1,162 @@
+---
+# Example Ansible role structure for OpenWebUI
+# Path: ansible/roles/openwebui/tasks/main.yml
+
+- name: Check if OpenWebUI is already deployed
+  stat:
+    path: "{{ openwebui_config_dir }}/docker-compose.yml"
+  register: openwebui_compose_file
+
+- name: Create directories for OpenWebUI
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ openwebui_config_dir }}"
+    - "{{ openwebui_config_dir }}/tests"
+    - "{{ openwebui_config_dir }}/scripts"
+    - "{{ openwebui_backup_dir }}"
+
+- name: Create Docker volumes for PostgreSQL and OpenWebUI data
+  docker_volume:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - "{{ openwebui_postgres_volume }}"
+    - "{{ openwebui_data_volume }}"
+
+- name: Create environment file
+  template:
+    src: openwebui.env.j2
+    dest: "{{ openwebui_config_dir }}/.env"
+    mode: '0600'
+  notify: Restart OpenWebUI
+
+- name: Create Docker Compose file
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ openwebui_config_dir }}/docker-compose.yml"
+    mode: '0644'
+  notify: Restart OpenWebUI
+
+- name: Deploy OpenWebUI using Docker Compose
+  community.docker.docker_compose:
+    project_src: "{{ openwebui_config_dir }}"
+    state: present
+  register: openwebui_deploy_result
+
+- name: Wait for PostgreSQL to be ready
+  command: >
+    docker exec {{ openwebui_postgres_container }} 
+    pg_isready -U {{ openwebui_db_user }} -d {{ openwebui_db_name }}
+  register: pg_ready
+  until: pg_ready.rc == 0
+  retries: 30
+  delay: 5
+  changed_when: false
+  when: openwebui_deploy_result.changed
+
+- name: Wait for OpenWebUI to be ready
+  uri:
+    url: "{{ openwebui_url }}"
+    validate_certs: "{{ openwebui_validate_certs }}"
+    status_code: 200, 302
+  register: openwebui_ready
+  until: openwebui_ready.status in [200, 302]
+  retries: 30
+  delay: 10
+  when: openwebui_deploy_result.changed
+
+- name: Deploy test scripts
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ openwebui_config_dir }}/tests/{{ item.dest }}"
+    mode: '0755'
+  loop:
+    - { src: 'connection_test.sh.j2', dest: 'connection_test.sh' }
+    - { src: 'db_schema_test.sh.j2', dest: 'db_schema_test.sh' }
+    - { src: 'api_test.sh.j2', dest: 'api_test.sh' }
+    - { src: 'ui_test.py.j2', dest: 'ui_test.py' }
+
+- name: Deploy backup scripts
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ openwebui_config_dir }}/scripts/{{ item.dest }}"
+    mode: '0755'
+  loop:
+    - { src: 'backup-postgres.sh.j2', dest: 'backup-postgres.sh' }
+    - { src: 'backup-appdata.sh.j2', dest: 'backup-appdata.sh' }
+
+- name: Install required Python packages for UI testing
+  pip:
+    name:
+      - selenium
+      - webdriver-manager
+    state: present
+  when: openwebui_install_ui_test_deps | bool
+
+- name: Setup test automation with cron
+  cron:
+    name: "{{ item.name }}"
+    job: "{{ item.job }}"
+    hour: "{{ item.hour }}"
+    minute: "{{ item.minute }}"
+    weekday: "{{ item.weekday }}"
+  loop:
+    - name: OpenWebUI connection test
+      job: "{{ openwebui_config_dir }}/tests/connection_test.sh >> {{ openwebui_log_dir }}/tests.log 2>&1"
+      hour: "2"
+      minute: "0"
+      weekday: "*"
+    - name: OpenWebUI database schema test
+      job: "{{ openwebui_config_dir }}/tests/db_schema_test.sh >> {{ openwebui_log_dir }}/tests.log 2>&1"
+      hour: "2"
+      minute: "15"
+      weekday: "*"
+    - name: OpenWebUI API test
+      job: "{{ openwebui_config_dir }}/tests/api_test.sh >> {{ openwebui_log_dir }}/tests.log 2>&1"
+      hour: "2"
+      minute: "30"
+      weekday: "*"
+    - name: OpenWebUI PostgreSQL backup
+      job: "{{ openwebui_config_dir }}/scripts/backup-postgres.sh >> {{ openwebui_log_dir }}/backups.log 2>&1"
+      hour: "3"
+      minute: "0"
+      weekday: "*"
+    - name: OpenWebUI application data backup
+      job: "{{ openwebui_config_dir }}/scripts/backup-appdata.sh >> {{ openwebui_log_dir }}/backups.log 2>&1"
+      hour: "3"
+      minute: "30"
+      weekday: "*"
+  when: openwebui_enable_cronjobs | bool
+
+- name: Run connection test to verify deployment
+  command: "{{ openwebui_config_dir }}/tests/connection_test.sh"
+  register: connection_test
+  ignore_errors: true
+  changed_when: false
+  when: openwebui_run_tests_after_deploy | bool and openwebui_deploy_result.changed
+
+- name: Run database schema test to verify deployment
+  command: "{{ openwebui_config_dir }}/tests/db_schema_test.sh"
+  register: db_test
+  ignore_errors: true
+  changed_when: false
+  when: openwebui_run_tests_after_deploy | bool and openwebui_deploy_result.changed and connection_test.rc == 0
+
+- name: Display deployment results
+  debug:
+    msg: |
+      OpenWebUI has been deployed successfully!
+      
+      URL: {{ openwebui_url }}
+      
+      Tests:
+      Connection: {{ 'PASSED' if connection_test.rc == 0 else 'FAILED' }}
+      Database: {{ 'PASSED' if db_test.rc == 0 else 'FAILED' }}
+      
+      Please ensure DNS records are properly configured for {{ openwebui_domain }}.
+  when: openwebui_deploy_result.changed
+
+

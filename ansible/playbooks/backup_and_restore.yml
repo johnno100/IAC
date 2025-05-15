@@ -1,0 +1,187 @@
+---
+# Backup infrastructure playbook
+- name: Configure Backup Infrastructure
+  hosts: proxmox_cluster
+  become: true
+  tasks:
+    - name: Install Proxmox Backup Server package (on primary backup node)
+      apt:
+        name: proxmox-backup-server
+        state: present
+      when: inventory_hostname == groups['proxmox_existing'][0]
+      
+    - name: Install Proxmox Backup Client on all nodes
+      apt:
+        name: proxmox-backup-client
+        state: present
+        
+    - name: Create backup directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /mnt/backup
+        - /mnt/backup/vm-backups
+        - /mnt/backup/config-backups
+        
+    - name: Configure backup storage in Proxmox
+      shell: pvesm add dir backup --path /mnt/backup/vm-backups --content backup
+      args:
+        creates: /etc/pve/storage.cfg.d/backup.cfg
+      when: inventory_hostname == groups['proxmox_existing'][0]
+      
+    - name: Create VM backup script
+      template:
+        src: templates/vm-backup.sh.j2
+        dest: /usr/local/bin/vm-backup.sh
+        mode: '0755'
+      vars:
+        backup_storage: backup
+        retention_count: 5
+        vm_ids: "all"
+        
+    - name: Schedule VM backups
+      cron:
+        name: "VM Backups"
+        job: "/usr/local/bin/vm-backup.sh > /var/log/vm-backup.log 2>&1"
+        hour: "1"
+        minute: "0"
+        weekday: "0"
+        
+    - name: Create configuration backup script
+      template:
+        src: templates/config-backup.sh.j2
+        dest: /usr/local/bin/config-backup.sh
+        mode: '0755'
+      vars:
+        backup_dir: /mnt/backup/config-backups
+        retention_days: 7
+        
+    - name: Schedule configuration backups
+      cron:
+        name: "Configuration Backups"
+        job: "/usr/local/bin/config-backup.sh > /var/log/config-backup.log 2>&1"
+        hour: "2"
+        minute: "0"
+        weekday: "*"
+
+# Docker services backup playbook
+- name: Configure Docker Services Backup
+  hosts: docker_hosts
+  become: true
+  tasks:
+    - name: Create backup directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /var/backups/docker
+        - /var/backups/docker/volumes
+        - /var/backups/docker/configs
+        
+    - name: Create Docker volume backup script
+      template:
+        src: templates/docker-volume-backup.sh.j2
+        dest: /usr/local/bin/docker-volume-backup.sh
+        mode: '0755'
+      vars:
+        backup_dir: /var/backups/docker/volumes
+        retention_days: 7
+        
+    - name: Create Docker configuration backup script
+      template:
+        src: templates/docker-config-backup.sh.j2
+        dest: /usr/local/bin/docker-config-backup.sh
+        mode: '0755'
+      vars:
+        backup_dir: /var/backups/docker/configs
+        retention_days: 7
+        
+    - name: Schedule Docker backups
+      cron:
+        name: "{{ item.name }}"
+        job: "{{ item.job }}"
+        hour: "{{ item.hour }}"
+        minute: "{{ item.minute }}"
+        weekday: "{{ item.weekday }}"
+      loop:
+        - name: Docker volume backups
+          job: "/usr/local/bin/docker-volume-backup.sh > /var/log/docker-volume-backup.log 2>&1"
+          hour: "3"
+          minute: "0"
+          weekday: "*"
+        - name: Docker config backups
+          job: "/usr/local/bin/docker-config-backup.sh > /var/log/docker-config-backup.log 2>&1"
+          hour: "3"
+          minute: "30"
+          weekday: "*"
+
+# Optional: Offsite backup configuration
+- name: Configure Offsite Backups
+  hosts: proxy_existing
+  become: true
+  vars_files:
+    - ../vars/vault.yml
+  tasks:
+    - name: Install rsync and required packages
+      apt:
+        name:
+          - rsync
+          - sshpass
+          - cron
+        state: present
+        
+    - name: Create offsite backup script
+      template:
+        src: templates/offsite-backup.sh.j2
+        dest: /usr/local/bin/offsite-backup.sh
+        mode: '0755'
+      vars:
+        local_backup_dir: /mnt/backup
+        remote_host: "{{ offsite_backup_host }}"
+        remote_user: "{{ offsite_backup_user }}"
+        remote_dir: "{{ offsite_backup_dir }}"
+        
+    - name: Schedule offsite backups
+      cron:
+        name: "Offsite Backups"
+        job: "/usr/local/bin/offsite-backup.sh > /var/log/offsite-backup.log 2>&1"
+        hour: "4"
+        minute: "0"
+        weekday: "0"
+      when: offsite_backup_host is defined and offsite_backup_user is defined and offsite_backup_dir is defined
+
+# Create restore scripts
+- name: Create Restore Scripts
+  hosts: proxmox_cluster
+  become: true
+  tasks:
+    - name: Create VM restore script
+      template:
+        src: templates/vm-restore.sh.j2
+        dest: /usr/local/bin/vm-restore.sh
+        mode: '0755'
+        
+    - name: Create configuration restore script
+      template:
+        src: templates/config-restore.sh.j2
+        dest: /usr/local/bin/config-restore.sh
+        mode: '0755'
+        
+- name: Create Docker Restore Scripts
+  hosts: docker_hosts
+  become: true
+  tasks:
+    - name: Create Docker volume restore script
+      template:
+        src: templates/docker-volume-restore.sh.j2
+        dest: /usr/local/bin/docker-volume-restore.sh
+        mode: '0755'
+        
+    - name: Create Docker configuration restore script
+      template:
+        src: templates/docker-config-restore.sh.j2
+        dest: /usr/local/bin/docker-config-restore.sh
+        mode: '0755'

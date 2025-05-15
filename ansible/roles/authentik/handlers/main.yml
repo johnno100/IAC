@@ -1,0 +1,17 @@
+# Path: ansible/roles/authentik/handlers/main.yml
+---
+- name: Restart Authentik
+  community.docker.docker_compose:
+    project_src: "{{ authentik_config_dir }}"
+    build: no
+    restarted: yes
+  ignore_errors: true
+
+- name: Restart Traefik
+  community.docker.docker_compose:
+    project_src: "{{ traefik_config_dir }}"
+    services: traefik
+    restarted: yes
+  ignore_errors: true
+  when: traefik_config_dir is defined
+

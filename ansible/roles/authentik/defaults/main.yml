@@ -1,0 +1,53 @@
+# Path: ansible/roles/authentik/defaults/main.yml
+---
+# Authentik version
+authentik_version: "2023.10.4"
+
+# Authentik directories
+authentik_config_dir: "/opt/authentik"
+authentik_custom_templates_dir: "{{ authentik_config_dir }}/custom-templates"
+authentik_media_dir: "{{ authentik_config_dir }}/media"
+authentik_certs_dir: "{{ authentik_config_dir }}/certs"
+authentik_backups_dir: "{{ authentik_config_dir }}/backups"
+
+# Network configuration
+authentik_network: "web"
+authentik_domain: "auth.example.com"
+authentik_validate_certs: no
+authentik_port: 9000
+
+# Database configuration
+authentik_db_host: "postgres"
+authentik_db_user: "authentik"
+authentik_db_name: "authentik"
+authentik_db_port: 5432
+
+# Container names
+authentik_server_container: "authentik-server"
+authentik_worker_container: "authentik-worker"
+authentik_db_container: "authentik-postgres"
+authentik_redis_container: "authentik-redis"
+
+# Volume names
+authentik_db_volume: "authentik-postgres-data"
+authentik_media_volume: "authentik-media"
+authentik_certs_volume: "authentik-certs"
+authentik_templates_volume: "authentik-custom-templates"
+
+# Worker settings
+authentik_worker_count: 2
+
+# Traefik integration
+authentik_traefik_integration: true
+authentik_middleware_name: "authentik-forward-auth"
+
+# Admin settings
+authentik_admin_email: "admin@example.com"
+
+# Error reporting
+authentik_error_reporting_enabled: false
+
+# Installation settings
+authentik_install_database: true
+authentik_install_redis: true
+

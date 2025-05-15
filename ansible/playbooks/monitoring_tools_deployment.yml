@@ -1,0 +1,277 @@
+---
+# Deploy Monitoring Stack Playbook
+- name: Set Up Monitoring Infrastructure
+  hosts: monitoring_hosts
+  become: true
+  vars_files:
+    - ../vars/vault.yml
+  
+  tasks:
+    - name: Ensure Docker is installed
+      include_role:
+        name: docker
+    
+    - name: Create monitoring directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /opt/monitoring
+        - /opt/monitoring/prometheus
+        - /opt/monitoring/grafana
+        - /opt/monitoring/alertmanager
+        - /opt/monitoring/node-exporter
+        - /opt/monitoring/blackbox-exporter
+
+    # Prometheus Configuration
+    - name: Create Prometheus configuration
+      template:
+        src: templates/prometheus.yml.j2
+        dest: /opt/monitoring/prometheus/prometheus.yml
+        mode: '0644'
+    
+    - name: Create Prometheus alerts configuration
+      template:
+        src: templates/prometheus-alerts.yml.j2
+        dest: /opt/monitoring/prometheus/alerts.yml
+        mode: '0644'
+
+    # Grafana Configuration
+    - name: Create Grafana provisioning directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /opt/monitoring/grafana/provisioning/datasources
+        - /opt/monitoring/grafana/provisioning/dashboards
+        - /opt/monitoring/grafana/dashboards
+    
+    - name: Configure Grafana datasources
+      template:
+        src: templates/grafana-datasources.yml.j2
+        dest: /opt/monitoring/grafana/provisioning/datasources/datasources.yml
+        mode: '0644'
+    
+    - name: Configure Grafana dashboards provisioning
+      template:
+        src: templates/grafana-dashboards.yml.j2
+        dest: /opt/monitoring/grafana/provisioning/dashboards/dashboards.yml
+        mode: '0644'
+        
+    - name: Copy Grafana dashboards
+      copy:
+        src: "files/grafana-dashboards/{{ item }}"
+        dest: "/opt/monitoring/grafana/dashboards/{{ item }}"
+        mode: '0644'
+      loop:
+        - node-exporter-full.json
+        - proxmox-dashboard.json
+        - docker-dashboard.json
+        - postgres-dashboard.json
+
+    # AlertManager Configuration
+    - name: Create AlertManager configuration
+      template:
+        src: templates/alertmanager.yml.j2
+        dest: /opt/monitoring/alertmanager/alertmanager.yml
+        mode: '0644'
+
+    # BlackBox Exporter Configuration
+    - name: Create BlackBox Exporter configuration
+      template:
+        src: templates/blackbox.yml.j2
+        dest: /opt/monitoring/blackbox-exporter/blackbox.yml
+        mode: '0644'
+
+    # Docker Compose for Monitoring Stack
+    - name: Create Docker Compose for Monitoring Stack
+      template:
+        src: templates/monitoring-stack.docker-compose.yml.j2
+        dest: /opt/monitoring/docker-compose.yml
+        mode: '0644'
+    
+    - name: Deploy Monitoring Stack
+      community.docker.docker_compose:
+        project_src: /opt/monitoring
+        state: present
+      register: monitoring_output
+    
+    - name: Display Monitoring Stack Endpoints
+      debug:
+        msg: |
+          Monitoring stack deployed successfully:
+          - Prometheus: http://{{ ansible_host }}:9090
+          - Grafana: http://{{ ansible_host }}:3000 (admin/{{ vault_grafana_admin_password }})
+          - AlertManager: http://{{ ansible_host }}:9093
+      when: monitoring_output.changed
+
+# Uptime Kuma Playbook
+- name: Deploy Uptime Kuma for Basic Monitoring
+  hosts: monitoring_hosts
+  become: true
+  tasks:
+    - name: Create directory for Uptime Kuma
+      file:
+        path: /opt/uptime-kuma
+        state: directory
+        mode: '0755'
+    
+    - name: Create Docker Compose for Uptime Kuma
+      template:
+        src: templates/uptime-kuma.docker-compose.yml.j2
+        dest: /opt/uptime-kuma/docker-compose.yml
+        mode: '0644'
+    
+    - name: Deploy Uptime Kuma
+      community.docker.docker_compose:
+        project_src: /opt/uptime-kuma
+        state: present
+      register: uptime_kuma_output
+    
+    - name: Display Uptime Kuma Endpoint
+      debug:
+        msg: "Uptime Kuma is available at http://{{ ansible_host }}:3001"
+      when: uptime_kuma_output.changed
+
+# Node Exporter Installation for Proxmox Hosts
+- name: Install Node Exporter on Proxmox Nodes
+  hosts: proxmox_cluster
+  become: true
+  tasks:
+    - name: Download Node Exporter
+      get_url:
+        url: https://github.com/prometheus/node_exporter/releases/download/v1.5.0/node_exporter-1.5.0.linux-amd64.tar.gz
+        dest: /tmp/node_exporter.tar.gz
+        mode: '0644'
+    
+    - name: Create Node Exporter user
+      user:
+        name: node_exporter
+        system: yes
+        shell: /bin/false
+        create_home: no
+    
+    - name: Extract Node Exporter
+      unarchive:
+        src: /tmp/node_exporter.tar.gz
+        dest: /tmp
+        remote_src: yes
+    
+    - name: Copy Node Exporter binary
+      copy:
+        src: /tmp/node_exporter-1.5.0.linux-amd64/node_exporter
+        dest: /usr/local/bin/
+        mode: '0755'
+        remote_src: yes
+        owner: node_exporter
+        group: node_exporter
+    
+    - name: Create Node Exporter systemd service
+      template:
+        src: templates/node_exporter.service.j2
+        dest: /etc/systemd/system/node_exporter.service
+        mode: '0644'
+    
+    - name: Enable and start Node Exporter
+      systemd:
+        name: node_exporter
+        state: started
+        enabled: yes
+        daemon_reload: yes
+    
+    - name: Allow Node Exporter in firewall
+      ufw:
+        rule: allow
+        port: 9100
+        proto: tcp
+
+# Netbox Deployment
+- name: Deploy Netbox for Infrastructure Documentation
+  hosts: netbox_hosts
+  become: true
+  vars_files:
+    - ../vars/vault.yml
+  tasks:
+    - name: Ensure Docker is installed
+      include_role:
+        name: docker
+    
+    - name: Create Netbox directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /opt/netbox
+        - /opt/netbox/postgres-data
+        - /opt/netbox/redis-data
+        - /opt/netbox/netbox-media-files
+        - /opt/netbox/netbox-reports
+    
+    - name: Create Netbox environment file
+      template:
+        src: templates/netbox.env.j2
+        dest: /opt/netbox/.env
+        mode: '0644'
+    
+    - name: Create Netbox Docker Compose file
+      template:
+        src: templates/netbox.docker-compose.yml.j2
+        dest: /opt/netbox/docker-compose.yml
+        mode: '0644'
+    
+    - name: Deploy Netbox
+      community.docker.docker_compose:
+        project_src: /opt/netbox
+        state: present
+      register: netbox_output
+    
+    - name: Display Netbox Endpoint
+      debug:
+        msg: "Netbox is available at http://{{ ansible_host }}:8000 (admin/{{ vault_netbox_admin_password }})"
+      when: netbox_output.changed
+
+# HashiCorp Vault Deployment
+- name: Deploy HashiCorp Vault for Secrets Management
+  hosts: vault_hosts
+  become: true
+  tasks:
+    - name: Ensure Docker is installed
+      include_role:
+        name: docker
+    
+    - name: Create Vault directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /opt/vault
+        - /opt/vault/config
+        - /opt/vault/data
+        - /opt/vault/logs
+    
+    - name: Create Vault configuration
+      template:
+        src: templates/vault.hcl.j2
+        dest: /opt/vault/config/vault.hcl
+        mode: '0644'
+    
+    - name: Create Vault Docker Compose file
+      template:
+        src: templates/vault.docker-compose.yml.j2
+        dest: /opt/vault/docker-compose.yml
+        mode: '0644'
+    
+    - name: Deploy Vault
+      community.docker.docker_compose:
+        project_src: /opt/vault
+        state: present
+      register: vault_output
+    
+    - name: Display Vault Endpoint
+      debug:
+        msg: "Vault is available at http://{{ ansible_host }}:8200"
+      when: vault_output.changed

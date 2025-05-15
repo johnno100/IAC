@@ -1,0 +1,473 @@
+---
+# Documentation setup playbook
+- name: Set up MkDocs for Documentation
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Install MkDocs and required packages
+      pip:
+        name:
+          - mkdocs
+          - mkdocs-material
+          - mkdocs-awesome-pages-plugin
+          - mkdocs-diagrams
+          - pymdown-extensions
+        extra_args: --user
+      become: false
+      
+    - name: Create MkDocs configuration
+      copy:
+        dest: "{{ playbook_dir }}/../docs/mkdocs.yml"
+        content: |
+          site_name: AI Infrastructure Documentation
+          site_description: Technical documentation for our AI infrastructure
+          site_author: Your Organization
+          
+          theme:
+            name: material
+            palette:
+              primary: indigo
+              accent: indigo
+            features:
+              - navigation.tabs
+              - navigation.sections
+              - navigation.expand
+              - search.highlight
+              - search.share
+          
+          plugins:
+            - search
+            - awesome-pages
+            - diagrams
+          
+          markdown_extensions:
+            - admonition
+            - attr_list
+            - codehilite
+            - footnotes
+            - meta
+            - pymdownx.arithmatex
+            - pymdownx.betterem
+            - pymdownx.caret
+            - pymdownx.critic
+            - pymdownx.details
+            - pymdownx.emoji
+            - pymdownx.highlight
+            - pymdownx.inlinehilite
+            - pymdownx.keys
+            - pymdownx.mark
+            - pymdownx.smartsymbols
+            - pymdownx.superfences
+            - pymdownx.tabbed
+            - pymdownx.tasklist
+            - pymdownx.tilde
+            - toc:
+                permalink: true
+          
+          nav:
+            - Home: index.md
+            - Architecture:
+                - Overview: architecture/overview.md
+                - Network Topology: architecture/network-topology.md
+                - Storage Architecture: architecture/storage.md
+            - Infrastructure:
+                - Proxmox Cluster: infrastructure/proxmox-cluster.md
+                - Docker Hosts: infrastructure/docker-hosts.md
+                - Monitoring: infrastructure/monitoring.md
+            - Services:
+                - Traefik: services/traefik.md
+                - Authentik: services/authentik.md
+                - OpenWebUI: services/openwebui.md
+                - Portainer: services/portainer.md
+            - Operations:
+                - Backup & Recovery: operations/backup-recovery.md
+                - Security: operations/security.md
+                - Monitoring: operations/monitoring.md
+            - Howtos:
+                - Adding VMs: howtos/adding-vms.md
+                - Deploying Containers: howtos/deploying-containers.md
+                - Restoring Backups: howtos/restoring-backups.md
+      become: false
+      
+    - name: Create documentation directory structure
+      file:
+        path: "{{ playbook_dir }}/../docs/docs/{{ item }}"
+        state: directory
+      loop:
+        - architecture
+        - infrastructure
+        - services
+        - operations
+        - howtos
+        - assets/images
+      become: false
+      
+    - name: Create index.md
+      copy:
+        dest: "{{ playbook_dir }}/../docs/docs/index.md"
+        content: |
+          # AI Infrastructure Documentation
+          
+          Welcome to the documentation for our AI Infrastructure. This documentation covers the architecture, implementation, and operations of our infrastructure.
+          
+          ## Infrastructure Overview
+          
+          Our infrastructure consists of:
+          
+          - Proxmox VE cluster for virtualization
+          - Docker/Portainer for container management
+          - Traefik for edge routing
+          - Authentik for identity management
+          - OpenWebUI for AI interface
+          - Comprehensive monitoring and backup systems
+          
+          ## Quick Links
+          
+          - [Architecture Overview](architecture/overview.md)
+          - [Proxmox Cluster](infrastructure/proxmox-cluster.md)
+          - [Docker Hosts](infrastructure/docker-hosts.md)
+          - [Backup & Recovery](operations/backup-recovery.md)
+      become: false
+      
+    - name: Create architecture overview document
+      copy:
+        dest: "{{ playbook_dir }}/../docs/docs/architecture/overview.md"
+        content: |
+          # Architecture Overview
+          
+          This page describes the overall architecture of our AI infrastructure.
+          
+          ## Components
+          
+          ```mermaid
+          graph TD
+              subgraph "Proxmox Cluster"
+                  PVE1[Proxmox Node 1] --- PVE2[Proxmox Node 2 - T440]
+                  PVE1 --- ClusterNet[Cluster Network]
+                  PVE2 --- ClusterNet
+              end
+              
+              subgraph "VMs"
+                  Docker1[Docker Host 1] --- Docker2[Docker Host 2]
+                  Monitor[Monitoring VM]
+                  Vault[HashiCorp Vault VM]
+                  Netbox[Netbox VM]
+              end
+              
+              subgraph "Services"
+                  Traefik[Traefik Edge Router]
+                  Authentik[Authentik IdP]
+                  Portainer[Portainer]
+                  OpenWebUI[OpenWebUI]
+                  Monitoring[Prometheus/Grafana]
+              end
+              
+              PVE1 --- Docker1
+              PVE2 --- Docker2
+              PVE1 --- Monitor
+              PVE2 --- Vault
+              PVE2 --- Netbox
+              
+              Docker1 --- Traefik
+              Docker1 --- Authentik
+              Docker2 --- Portainer
+              Docker2 --- OpenWebUI
+              Monitor --- Monitoring
+          ```
+          
+          ## Design Principles
+          
+          Our infrastructure is designed with the following principles:
+          
+          1. **High Availability**: Critical services are distributed across multiple nodes
+          2. **Security**: Layered security approach with Authentik and secure networking
+          3. **Monitoring**: Comprehensive monitoring of all components
+          4. **Backup & Recovery**: Regular backups and tested recovery procedures
+          5. **Documentation**: Complete documentation of all components and procedures
+      become: false
+      
+    - name: Create proxmox cluster document
+      copy:
+        dest: "{{ playbook_dir }}/../docs/docs/infrastructure/proxmox-cluster.md"
+        content: |
+          # Proxmox Cluster
+          
+          Our Proxmox cluster consists of two nodes:
+          
+          1. **Existing Proxmox Node** (pve1)
+          2. **Dell PowerEdge T440** (pve2)
+          
+          ## Cluster Configuration
+          
+          The cluster is configured with:
+          
+          - Cluster Name: `ai-cluster`
+          - Cluster Network: `10.10.10.0/24`
+          - Quorum: 2 nodes (both required for quorum)
+          
+          ## Node Specifications
+          
+          ### Node 1 (pve1)
+          
+          * IP Address: 192.168.1.101
+          * Cluster Network IP: 10.10.10.1
+          * Role: Existing node, cluster master
+          
+          ### Node 2 (pve2) - Dell PowerEdge T440
+          
+          * IP Address: 192.168.1.102
+          * Cluster Network IP: 10.10.10.2
+          * Role: New high-performance node
+          * Hardware:
+            * Processors: [T440 CPU details]
+            * Memory: [T440 memory details]
+            * Storage: [T440 storage details]
+          
+          ## VM Distribution
+          
+          VMs are distributed across nodes for optimal resource usage and high availability.
+          
+          ## Storage Configuration
+          
+          [Details of storage configuration]
+          
+          ## Network Configuration
+          
+          [Details of network configuration]
+          
+          ## Backup Configuration
+          
+          [Details of backup configuration]
+      become: false
+      
+    - name: Create OpenWebUI service document
+      copy:
+        dest: "{{ playbook_dir }}/../docs/docs/services/openwebui.md"
+        content: |
+          # OpenWebUI
+          
+          OpenWebUI provides a web interface for AI models and is deployed in our infrastructure with a PostgreSQL backend.
+          
+          ## Architecture
+          
+          OpenWebUI consists of:
+          
+          - Frontend container
+          - Backend container
+          - PostgreSQL database container
+          
+          ## Configuration
+          
+          OpenWebUI is configured with:
+          
+          - Database: PostgreSQL
+          - Authentication: Integrated with Authentik
+          - Reverse Proxy: Traefik
+          
+          ## Deployment
+          
+          OpenWebUI is deployed on Docker Host 2 (Docker VM on the T440 node).
+          
+          ## Monitoring
+          
+          Monitoring is implemented with:
+          
+          - Prometheus metrics
+          - Grafana dashboards
+          - Uptime checks
+          
+          ## Backup
+          
+          Backups are configured for:
+          
+          - PostgreSQL database (daily)
+          - Application data (daily)
+          
+          ## Testing
+          
+          Automated tests run daily:
+          
+          - Connection tests
+          - Database schema tests
+          - API tests
+          - UI tests
+      become: false
+      
+    - name: Create backup and recovery document
+      copy:
+        dest: "{{ playbook_dir }}/../docs/docs/operations/backup-recovery.md"
+        content: |
+          # Backup and Recovery
+          
+          This page describes our backup and recovery procedures.
+          
+          ## Backup Strategy
+          
+          We follow the 3-2-1 backup rule:
+          - 3 copies of data
+          - 2 different storage media
+          - 1 copy offsite
+          
+          ## Backup Schedule
+          
+          | Backup Type | Schedule | Retention |
+          |------------|----------|-----------|
+          | VM Backups | Weekly (Sunday) | 5 versions |
+          | Configuration Backups | Daily | 7 days |
+          | Docker Volume Backups | Daily | 7 days |
+          | Docker Config Backups | Daily | 7 days |
+          | Offsite Backups | Weekly | 4 weeks |
+          
+          ## Backup Procedures
+          
+          ### VM Backups
+          
+          VMs are backed up using Proxmox's built-in backup functionality:
+          
+          ```bash
+          vzdump <vmid> --storage backup --compress zstd --mode snapshot
+          ```
+          
+          ### Docker Volume Backups
+          
+          Docker volumes are backed up using:
+          
+          ```bash
+          docker run --rm -v <volume_name>:/source -v /path/to/backup:/backup \
+            alpine tar -czf /backup/<volume_name>-$(date +%Y%m%d).tar.gz -C /source .
+          ```
+          
+          ## Recovery Procedures
+          
+          ### VM Recovery
+          
+          To restore a VM from backup:
+          
+          ```bash
+          qmrestore /mnt/backup/vzdump-qemu-<vmid>-<date>.vma.zstd <vmid> --storage <storage>
+          ```
+          
+          ### Docker Volume Recovery
+          
+          To restore a Docker volume from backup:
+          
+          ```bash
+          docker volume create <volume_name>
+          docker run --rm -v <volume_name>:/dest -v /path/to/backup:/backup \
+            alpine sh -c "cd /dest && tar -xzf /backup/<volume_name>-<date>.tar.gz"
+          ```
+          
+          ## Testing Recovery
+          
+          Recovery procedures are tested monthly to ensure:
+          
+          1. Backups are valid
+          2. Recovery procedures work as expected
+          3. Recovery time objectives (RTOs) are met
+      become: false
+      
+    - name: Generate .gitignore for docs
+      copy:
+        dest: "{{ playbook_dir }}/../docs/.gitignore"
+        content: |
+          site/
+          __pycache__/
+          *.pyc
+          .DS_Store
+      become: false
+      
+    - name: Create documentation README
+      copy:
+        dest: "{{ playbook_dir }}/../docs/README.md"
+        content: |
+          # Infrastructure Documentation
+          
+          This directory contains the documentation for our AI infrastructure.
+          
+          ## Building the Docs
+          
+          To build the documentation:
+          
+          ```bash
+          # Install MkDocs and required packages
+          pip install mkdocs mkdocs-material mkdocs-awesome-pages-plugin mkdocs-diagrams pymdown-extensions
+          
+          # Serve the docs locally
+          mkdocs serve
+          
+          # Build the static site
+          mkdocs build
+          ```
+          
+          ## Documentation Structure
+          
+          - `docs/`: Markdown source files
+            - `architecture/`: Overall architecture
+            - `infrastructure/`: Infrastructure components
+            - `services/`: Service configurations
+            - `operations/`: Operational procedures
+            - `howtos/`: Step-by-step guides
+            - `assets/`: Images and diagrams
+          - `mkdocs.yml`: MkDocs configuration
+          
+          ## Contributing
+          
+          To add or update documentation:
+          
+          1. Clone the repository
+          2. Create a new branch
+          3. Make your changes
+          4. Submit a pull request
+      become: false
+
+# Draw.io integration playbook
+- name: Set up Draw.io for infrastructure diagrams
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Create diagrams directory
+      file:
+        path: "{{ playbook_dir }}/../diagrams"
+        state: directory
+      become: false
+      
+    - name: Create network topology diagram (template)
+      copy:
+        dest: "{{ playbook_dir }}/../diagrams/network-topology.drawio"
+        content: |
+          <mxfile host="app.diagrams.net" modified="2023-01-01T00:00:00.000Z" agent="5.0 (Macintosh)" version="15.8.6" etag="abcdefghijklmnop" type="device"><diagram id="network-topology" name="Network Topology">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</diagram></mxfile>
+      become: false
+      
+    - name: Create infrastructure overview diagram (template)
+      copy:
+        dest: "{{ playbook_dir }}/../diagrams/infrastructure-overview.drawio"
+        content: |
+          <mxfile host="app.diagrams.net" modified="2023-01-01T00:00:00.000Z" agent="5.0 (Macintosh)" version="15.8.6" etag="abcdefghijklmnop" type="device"><diagram id="infrastructure-overview" name="Infrastructure Overview">7VpRb9owEP41PBapSUjgkbZ0m1SpGlq17dEkJrFmYmbMgP36nYnTEIMCVQtIRUJCuXPOse/7fOfYpuNN4uVnTtLoOweGu9BjyxnvugtDf+gPzE+FrDJkEHgZEAoClVA7MCP/oHZU6JwwyJxEyTmVJHVBnyYJ+NLBCBd84aYFHLtvTUkIDjDzCXXR34TJSGsI+i3+BUgY1W/2vZEaiUmdXO+QRYTxxYbJu+l6E865zJ7i5QR41byaL9m82w2jTccEJHKfCeFgNBiHEbk7BNGnwZ1HZl+Cax3lieBzLfCUEF8LT5d1GoJnUvBHmHDKRYl4XvlrRgJC8QY+DarVjqw0QcQ4NoA/jwRMTQcyTXBiFoVEQpaZITWDkjCWGq35s3JlXI9lOSixGf8O4yKJi4BokSVg2W/AQU6/Zam9zxBLWBrAzwT3jYyzCON0wJOyUaVApjmXMTWPvnkMitCmV1DZAX/QM2GY4CtpFCxGxHBCZQsVDUwrJXBWvOuOxyDmRueiuVd50cRoS4xBQgnYs+ASCkXZdJoFr27YWkn3DEyj76eWoRVJI4Ig2rT5jJR/cTqfKhXLADJpPt8oTlLYMoPcKDCfTIqzEtTcSPXZtGaLzCwuYSzTmOZOuZHQZ9aQpgm3qm9hYJIlvRsB+NrICLLHEHi8Qz+Z4CuT2spmMbRQJJkp+JzYMbI5oH5T9Bw5vR7GJuNNTXn70JO7nqsqmvXctnAQxKZu7qyp2i7Zt5D0F9qCHw17D/LBJfWM2e1+QUNvzO2p1bO9V7cF6nIPrkv/YjyBPMdTXfN7duFiuXG15rDKrWADVHfZDppnNdTcJolJvtmKqYGwLYaRKsM2wtomWFMV+rZIJ5zbdHs2TDLTVkBm6rNXoqwFZOaI0ihhY+4Wy3E0tVYhsVrn1Fo2zxgVXVL5ZWpw9nHCz0Mzns5CtvNc8Ai1a95ZiO8c1CLWO8vLXxJxcH/ZrJvpyRqsfQsnmXsEKy8kS8+JY1ygb0Ct3IrNv4DcTMa72Lp/NzSyG9qGY4M9HJvBGlQB71jQqjHLcqB9Rx9b3KS7jm/QXgPcRlM9cHZN9aBba3LXxQz69Q3ZYa5vuLO+wT7e78jN8Z4eH8rp4dzUsfN07XNkq+LcF8Tr+rJFnXsc8GnYkl22ek7uCdGQd0Z33sHZ/anRdDHBDjcpJ4ksex9Gxq1uBUHVo39Rkl8Vmx8UXdMVBdWH0eH9/EXfuqjQ7bPrKKd+dXKSV2uV94bOQe3+akvSZkZGHLvj7lM0DLZvl8zDVX7/pqrsjkVU6Kpv3BQjLDhljNqvUgx+1O4ruwpg+k7tuQQwrbf7JkOWJ/Rl60L7YYn3/Bc=</diagram></mxfile>
+      become: false
+      
+    - name: Add diagrams to .gitignore
+      copy:
+        dest: "{{ playbook_dir }}/../.gitignore"
+        content: |
+          # Ignore diagram lock files
+          diagrams/*.drawio.bkp
+          diagrams/*.drawio.dtmp
+        
+          # Ignore built documentation
+          docs/site/
+        
+          # Python artifacts
+          __pycache__/
+          *.py[cod]
+          *$py.class
+          
+          # Ansible artifacts
+          *.retry
+          
+          # Environment files
+          .env
+          *.env
+          
+          # Vault password file
+          .vault_pass
+      become: false

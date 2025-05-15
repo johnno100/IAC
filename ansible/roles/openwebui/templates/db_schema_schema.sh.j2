@@ -1,0 +1,39 @@
+ Path: ansible/roles/openwebui/templates/db_schema_test.sh.j2
+---
+#!/bin/bash
+# Database schema tests for OpenWebUI
+
+# Configuration
+POSTGRES_CONTAINER="{{ openwebui_postgres_container }}"
+DB_USER="{{ openwebui_db_user }}"
+DB_NAME="{{ openwebui_db_name }}"
+
+echo "Starting OpenWebUI database schema tests at $(date)"
+echo "----------------------------------------"
+
+# Test database existence
+echo "Checking database existence..."
+if docker exec $POSTGRES_CONTAINER psql -U $DB_USER -lqt | cut -d \| -f 1 | grep -qw $DB_NAME; then
+  echo "✅ Database '$DB_NAME' exists"
+else
+  echo "❌ Database '$DB_NAME' does not exist"
+  exit 1
+fi
+
+# Test required tables existence
+echo "Checking database tables..."
+REQUIRED_TABLES=("users" "conversations" "settings")
+
+for table in "${REQUIRED_TABLES[@]}"; do
+  if docker exec $POSTGRES_CONTAINER psql -U $DB_USER -d $DB_NAME -c "\dt $table" | grep -q "$table"; then
+    echo "✅ Table '$table' exists"
+  else
+    echo "❌ Table '$table' does not exist"
+    exit 1
+  fi
+done
+
+echo "----------------------------------------"
+echo "All database schema tests passed at $(date)"
+exit 0
+

@@ -1,0 +1,285 @@
+---
+# Initial setup playbook for T440 integration
+- name: Prepare Environment for T440 Integration
+  hosts: proxmox_cluster
+  become: true
+  gather_facts: true
+  
+  pre_tasks:
+    - name: Update package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+        
+    - name: Install required packages
+      apt:
+        name:
+          - python3-pip
+          - python3-proxmoxer
+          - jq
+          - net-tools
+          - bridge-utils
+          - ifupdown2
+          - chrony
+        state: present
+        
+  tasks:
+    - name: Configure hosts file
+      template:
+        src: templates/hosts.j2
+        dest: /etc/hosts
+        owner: root
+        group: root
+        mode: '0644'
+        backup: yes
+        
+    - name: Configure network interfaces
+      template:
+        src: templates/interfaces.j2
+        dest: /etc/network/interfaces
+        owner: root
+        group: root
+        mode: '0644'
+        backup: yes
+      vars:
+        node_config: "{{ network_interfaces[inventory_hostname] }}"
+      when: network_interfaces is defined and network_interfaces[inventory_hostname] is defined
+      notify: Restart networking
+      
+    - name: Configure chrony for time synchronization
+      template:
+        src: templates/chrony.conf.j2
+        dest: /etc/chrony/chrony.conf
+        owner: root
+        group: root
+        mode: '0644'
+        backup: yes
+      notify: Restart chrony
+      
+    - name: Enable chrony service
+      systemd:
+        name: chrony
+        enabled: yes
+        state: started
+        
+    - name: Configure basic firewall rules
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop:
+        - 22    # SSH
+        - 8006  # Proxmox web UI
+        - 3128  # Proxmox proxy
+        - 5404  # Corosync
+        - 5405  # Corosync
+      
+    - name: Allow cluster network traffic
+      ufw:
+        rule: allow
+        from_ip: "{{ cluster_network }}"
+        
+    - name: Enable UFW
+      ufw:
+        state: enabled
+        policy: deny
+        
+    - name: Ensure Proxmox directories exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      loop:
+        - /etc/pve/nodes
+        - /etc/pve/priv
+        - /etc/pve/storage.cfg.d
+      
+  handlers:
+    - name: Restart networking
+      service:
+        name: networking
+        state: restarted
+      
+    - name: Restart chrony
+      service:
+        name: chrony
+        state: restarted
+
+- name: Configure Proxmox Cluster
+  hosts: proxmox_cluster
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Create Proxmox cluster (on master node)
+      command: pvecm create {{ cluster_name }}
+      args:
+        creates: /etc/pve/corosync.conf
+      when: inventory_hostname in groups['proxmox_existing'] and hostvars[inventory_hostname]['cluster_role'] == 'master'
+      
+    - name: Generate cluster join token (on master node)
+      command: pvecm token generate
+      register: cluster_token
+      when: inventory_hostname in groups['proxmox_existing'] and hostvars[inventory_hostname]['cluster_role'] == 'master'
+      
+    - name: Set cluster token fact
+      set_fact:
+        join_token: "{{ cluster_token.stdout_lines[-1] }}"
+      when: inventory_hostname in groups['proxmox_existing'] and hostvars[inventory_hostname]['cluster_role'] == 'master' and cluster_token.stdout is defined
+      
+    - name: Share token with other nodes
+      set_fact:
+        join_token: "{{ hostvars[groups['proxmox_existing'][0]]['join_token'] }}"
+      when: inventory_hostname in groups['proxmox_new'] and hostvars[groups['proxmox_existing'][0]]['join_token'] is defined
+      
+    - name: Join Proxmox cluster (on new nodes)
+      command: >
+        pvecm add {{ hostvars[groups['proxmox_existing'][0]]['ansible_host'] }} --token {{ join_token }}
+      args:
+        creates: /etc/pve/corosync.conf
+      when: inventory_hostname in groups['proxmox_new'] and hostvars[inventory_hostname]['join_token'] is defined
+      
+    - name: Wait for cluster stabilization
+      pause:
+        seconds: 30
+        
+    - name: Check cluster status
+      command: pvecm status
+      register: cluster_status
+      changed_when: false
+      
+    - name: Display cluster status
+      debug:
+        var: cluster_status.stdout_lines
+      
+    - name: Configure Proxmox migration network
+      lineinfile:
+        path: /etc/pve/datacenter.cfg
+        line: "migration: secure=1,network={{ cluster_network }}"
+        regexp: '^migration:'
+        create: yes
+      when: inventory_hostname in groups['proxmox_existing'] and hostvars[inventory_hostname]['cluster_role'] == 'master'
+        
+    - name: Configure shared storage (optional)
+      shell: pvesm add nfs shared-nfs --server {{ storage_types.shared_nfs.server }} --export {{ storage_types.shared_nfs.export }} --content images,rootdir
+      args:
+        creates: /etc/pve/storage.cfg.d/shared-nfs.cfg
+      when: storage_types is defined and storage_types.shared_nfs is defined and inventory_hostname in groups['proxmox_existing'] and hostvars[inventory_hostname]['cluster_role'] == 'master'
+      
+    - name: Create resource pools
+      shell: pvesh create /pools --poolid {{ item.name }} --comment "{{ item.description }}"
+      args:
+        creates: /etc/pve/user.cfg
+      loop:
+        - { name: "production", description: "Production VMs" }
+        - { name: "development", description: "Development VMs" }
+        - { name: "highperformance", description: "High Performance VMs" }
+      when: inventory_hostname in groups['proxmox_existing'] and hostvars[inventory_hostname]['cluster_role'] == 'master'
+
+# Install monitoring tools playbook
+- name: Install Cockpit on Proxmox Nodes
+  hosts: proxmox_cluster
+  become: true
+  tasks:
+    - name: Install Cockpit packages
+      apt:
+        name:
+          - cockpit
+          - cockpit-pcp
+          - cockpit-storaged
+        state: present
+        
+    - name: Enable and start Cockpit
+      systemd:
+        name: cockpit.socket
+        enabled: yes
+        state: started
+        
+    - name: Allow Cockpit in firewall
+      ufw:
+        rule: allow
+        port: 9090
+        proto: tcp
+
+- name: Deploy Uptime Kuma for Basic Monitoring
+  hosts: docker_hosts
+  become: true
+  tasks:
+    - name: Ensure Docker is installed
+      include_role:
+        name: docker
+        
+    - name: Create directory for Uptime Kuma
+      file:
+        path: /opt/uptime-kuma
+        state: directory
+        mode: '0755'
+        
+    - name: Create Docker Compose file for Uptime Kuma
+      template:
+        src: templates/uptime-kuma.docker-compose.yml.j2
+        dest: /opt/uptime-kuma/docker-compose.yml
+        mode: '0644'
+        
+    - name: Deploy Uptime Kuma
+      community.docker.docker_compose:
+        project_src: /opt/uptime-kuma
+        state: present
+      register: uptime_kuma_output
+      
+    - name: Display Uptime Kuma endpoint
+      debug:
+        msg: "Uptime Kuma is available at http://{{ ansible_host }}:3001"
+      when: uptime_kuma_output.changed
+
+# VM migration and management playbook
+- name: Prepare VM Migration
+  hosts: proxmox_existing
+  become: true
+  tasks:
+    - name: List current VMs
+      shell: qm list | grep -v VMID | awk '{print $1}'
+      register: current_vms
+      changed_when: false
+      
+    - name: Display current VMs
+      debug:
+        msg: "Current VMs on {{ inventory_hostname }}: {{ current_vms.stdout_lines }}"
+        
+    - name: Create migration script
+      template:
+        src: templates/vm-migration.sh.j2
+        dest: /root/vm-migration.sh
+        mode: '0755'
+      vars:
+        vms_to_migrate: "{{ current_vms.stdout_lines }}"
+        target_node: "{{ groups['proxmox_new'][0] }}"
+      
+    - name: Create a test VM on the new node
+      shell: >
+        qm create 999 
+        --name test-migration 
+        --memory 512 
+        --net0 virtio,bridge=vmbr0 
+        --cores 1 
+        --node {{ groups['proxmox_new'][0] }}
+      args:
+        creates: /etc/pve/qemu-server/999.conf
+        
+    - name: Start the test VM
+      command: qm start 999
+      ignore_errors: true
+      
+    - name: Test VM migration
+      command: qm migrate 999 {{ inventory_hostname }} --online
+      register: test_migration
+      ignore_errors: true
+      
+    - name: Display migration test results
+      debug:
+        msg: "Migration test {{ 'succeeded' if test_migration.rc == 0 else 'failed' }}"
+      
+    - name: Cleanup test VM
+      command: qm destroy 999
+      ignore_errors: true

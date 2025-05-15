@@ -1,0 +1,46 @@
+# Path: ansible/roles/openwebui/defaults/main.yml
+---
+# OpenWebUI version
+openwebui_version: "latest"
+
+# Directories
+openwebui_config_dir: "/opt/openwebui"
+openwebui_backup_dir: "/var/backups/openwebui"
+openwebui_log_dir: "/var/log"
+
+# Network configuration
+openwebui_network: "web"
+openwebui_domain: "openwebui.example.com"
+openwebui_url: "https://{{ openwebui_domain }}"
+openwebui_validate_certs: no
+
+# Database configuration
+openwebui_db_host: "postgres"
+openwebui_db_user: "openwebui"
+openwebui_db_name: "openwebuidb"
+openwebui_db_port: 5432
+
+# Docker container names
+openwebui_container: "openwebui"
+openwebui_postgres_container: "openwebui-postgres"
+
+# Docker volumes
+openwebui_postgres_volume: "openwebui-postgres-data"
+openwebui_data_volume: "openwebui-data"
+
+# Integration options
+openwebui_traefik_integration: true
+openwebui_authentik_integration: true
+openwebui_authentik_middleware: "authentik-forward-auth@file"
+
+# Testing options
+openwebui_install_ui_test_deps: true
+openwebui_run_tests_after_deploy: true
+openwebui_enable_cronjobs: true
+
+# Backup configuration
+openwebui_backup_retention_days: 7
+
+# Extra environment variables (optional)
+openwebui_extra_env: {}
+

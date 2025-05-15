@@ -1,0 +1,82 @@
+# inventory/production/group_vars/proxmox_cluster.yml
+---
+# Cluster configuration
+cluster_name: ai-cluster
+cluster_config:
+  totem:
+    secauth: 1
+    version: 2
+    interface:
+      bindnetaddr: "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
+  quorum:
+    provider: corosync_votequorum
+    expected_votes: 2
+  logging:
+    to_syslog: yes
+  nodelist:
+    - name: pve1
+      nodeid: 1
+      ring0_addr: 192.168.1.101
+    - name: pve2
+      nodeid: 2
+      ring0_addr: 192.168.1.102
+
+# Network interfaces configuration
+network_interfaces:
+  pve1:
+    - name: lo
+      config:
+        address: 127.0.0.1
+        netmask: 255.0.0.0
+    - name: eno1
+      config:
+        address: 192.168.1.101
+        netmask: 255.255.255.0
+        gateway: 192.168.1.1
+    - name: eno2
+      config:
+        address: 10.10.10.1
+        netmask: 255.255.255.0
+    - name: vmbr0
+      config:
+        address: 192.168.1.101
+        netmask: 255.255.255.0
+        bridge_ports: eno1
+        bridge_stp: off
+        bridge_fd: 0
+    - name: vmbr1
+      config:
+        address: 10.10.10.1
+        netmask: 255.255.255.0
+        bridge_ports: eno2
+        bridge_stp: off
+        bridge_fd: 0
+  pve2:
+    - name: lo
+      config:
+        address: 127.0.0.1
+        netmask: 255.0.0.0
+    - name: eno1
+      config:
+        address: 192.168.1.102
+        netmask: 255.255.255.0
+        gateway: 192.168.1.1
+    - name: eno2
+      config:
+        address: 10.10.10.2
+        netmask: 255.255.255.0
+    - name: vmbr0
+      config:
+        address: 192.168.1.102
+        netmask: 255.255.255.0
+        bridge_ports: eno1
+        bridge_stp: off
+        bridge_fd: 0
+    - name: vmbr1
+      config:
+        address: 10.10.10.2
+        netmask: 255.255.255.0
+        bridge_ports: eno2
+        bridge_stp: off
+        bridge_fd: 0
+

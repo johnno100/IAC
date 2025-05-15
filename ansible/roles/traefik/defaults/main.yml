@@ -1,0 +1,80 @@
+# Path: ansible/roles/traefik/defaults/main.yml
+---
+# Traefik version
+traefik_version: "2.10"
+
+# Traefik directories
+traefik_config_dir: "/opt/traefik"
+traefik_certs_dir: "/opt/traefik/certs"
+traefik_logs_dir: "/opt/traefik/logs"
+
+# Network configuration
+traefik_network: "web"
+traefik_create_network: true
+
+# Port configuration
+traefik_http_port: 80
+traefik_https_port: 443
+traefik_dashboard_port: 8080
+
+# Traefik dashboard
+traefik_dashboard_enabled: true
+traefik_dashboard_domain: "traefik.example.com"
+traefik_dashboard_auth_enabled: true
+traefik_dashboard_users: []
+
+# API configuration
+traefik_api_enabled: true
+traefik_api_dashboard: true
+traefik_api_insecure: false
+
+# Let's Encrypt configuration
+traefik_acme_enabled: true
+traefik_acme_email: "admin@example.com"
+traefik_acme_staging: false
+traefik_acme_challenge_type: "tlsChallenge"
+traefik_acme_storage_file: "/letsencrypt/acme.json"
+
+# Docker provider configuration
+traefik_provider_docker_enabled: true
+traefik_provider_docker_exposedbydefault: false
+traefik_provider_docker_network: "{{ traefik_network }}"
+
+# File provider configuration
+traefik_provider_file_enabled: true
+traefik_provider_file_directory: "/etc/traefik/dynamic"
+traefik_provider_file_watch: true
+
+# Log configuration
+traefik_log_level: "INFO"
+traefik_log_format: "common"
+traefik_log_filepath: "{{ traefik_logs_dir }}/traefik.log"
+
+# Access log configuration
+traefik_accesslog_enabled: true
+traefik_accesslog_filepath: "{{ traefik_logs_dir }}/access.log"
+traefik_accesslog_format: "common"
+traefik_accesslog_bufferingsize: 100
+
+# Metrics configuration
+traefik_metrics_prometheus_enabled: true
+traefik_metrics_prometheus_buckets: [0.1, 0.3, 1.2, 5.0]
+
+# Global configuration
+traefik_global_sendanonymoususage: false
+traefik_global_checknewversion: true
+
+# Middlewares configuration
+traefik_middlewares:
+  - name: default-headers
+    type: headers
+    config:
+      browserXssFilter: true
+      contentTypeNosniff: true
+      frameDeny: true
+      sslRedirect: true
+      stsIncludeSubdomains: true
+      stsPreload: true
+      stsSeconds: 31536000
+      customFrameOptionsValue: "SAMEORIGIN"
+

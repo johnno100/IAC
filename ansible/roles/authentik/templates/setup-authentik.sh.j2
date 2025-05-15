@@ -1,0 +1,63 @@
+# Path: ansible/roles/authentik/templates/setup-authentik.sh.j2
+---
+#!/bin/bash
+# Initial setup script for Authentik configuration
+
+echo "Waiting for Authentik server to be fully operational..."
+# Wait for the API to be available
+for i in {1..30}; do
+  if curl -s -k -o /dev/null "https://{{ authentik_domain }}/api/v3/admin/overview/" \
+     -H "Authorization: Bearer {{ authentik_admin_token }}"; then
+    echo "Authentik API is accessible!"
+    break
+  fi
+  echo "Waiting for Authentik to be ready... (${i}/30)"
+  sleep 10
+done
+
+echo "Setting up Authentik initial configuration..."
+
+# Create Traefik Proxy Provider
+echo "Creating Traefik Proxy Provider..."
+curl -s -k -X POST "https://{{ authentik_domain }}/api/v3/outposts/providers/" \
+  -H "Authorization: Bearer {{ authentik_admin_token }}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Traefik Forward Auth Provider",
+    "outpost_type": "proxy",
+    "type": "authentik_providers_proxy.forwardauth",
+    "mode": "forward_auth",
+    "external_host": "https://{{ authentik_domain }}",
+    "authorization_flow": "default-provider-authorization-implicit-consent",
+    "property_mappings": []
+  }'
+
+# Setup initial groups
+echo "Creating initial groups..."
+curl -s -k -X POST "https://{{ authentik_domain }}/api/v3/core/groups/" \
+  -H "Authorization: Bearer {{ authentik_admin_token }}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "AI-Users",
+    "is_superuser": false
+  }'
+
+curl -s -k -X POST "https://{{ authentik_domain }}/api/v3/core/groups/" \
+  -H "Authorization: Bearer {{ authentik_admin_token }}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "AI-Power-Users",
+    "is_superuser": false
+  }'
+
+curl -s -k -X POST "https://{{ authentik_domain }}/api/v3/core/groups/" \
+  -H "Authorization: Bearer {{ authentik_admin_token }}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "AI-Admins",
+    "is_superuser": false
+  }'
+
+echo "Initial setup completed successfully."
+exit 0
+

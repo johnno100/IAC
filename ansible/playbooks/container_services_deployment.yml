@@ -1,0 +1,293 @@
+---
+# Deploy Docker host with Portainer
+- name: Set up Docker host with Portainer
+  hosts: docker_hosts
+  become: true
+  vars_files:
+    - ../vars/vault.yml
+  
+  tasks:
+    - name: Install required packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - python3-pip
+        state: present
+        update_cache: yes
+    
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+    
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+    
+    - name: Install Docker packages
+      apt:
+        name: "{{ docker_packages }}"
+        state: present
+        update_cache: yes
+    
+    - name: Install Docker Python module
+      pip:
+        name: docker
+        state: present
+    
+    - name: Add users to docker group
+      user:
+        name: "{{ item }}"
+        groups: docker
+        append: yes
+      loop: "{{ docker_users }}"
+      when: docker_users is defined
+    
+    - name: Create Docker daemon configuration
+      template:
+        src: templates/docker-daemon.json.j2
+        dest: /etc/docker/daemon.json
+        mode: '0644'
+      notify: Restart Docker
+    
+    - name: Enable and start Docker service
+      systemd:
+        name: docker
+        enabled: yes
+        state: started
+    
+    - name: Create Docker networks
+      docker_network:
+        name: "{{ item.name }}"
+        driver: "{{ item.driver | default('bridge') }}"
+        ipam_config: "{{ item.ipam_config | default(omit) }}"
+        internal: "{{ item.internal | default(false) }}"
+      loop: "{{ docker_networks }}"
+      when: docker_networks is defined
+    
+    # Portainer Deployment
+    - name: Create directory for Portainer
+      file:
+        path: /opt/portainer
+        state: directory
+        mode: '0755'
+    
+    - name: Create Docker Compose for Portainer
+      template:
+        src: templates/portainer.docker-compose.yml.j2
+        dest: /opt/portainer/docker-compose.yml
+        mode: '0644'
+    
+    - name: Deploy Portainer
+      community.docker.docker_compose:
+        project_src: /opt/portainer
+        state: present
+      register: portainer_output
+    
+    - name: Display Portainer endpoint
+      debug:
+        msg: "Portainer is available at http://{{ ansible_host }}:9000"
+      when: portainer_output.changed
+  
+  handlers:
+    - name: Restart Docker
+      systemd:
+        name: docker
+        state: restarted
+
+# Deploy Traefik
+- name: Deploy Traefik
+  hosts: docker_hosts
+  become: true
+  vars_files:
+    - ../vars/vault.yml
+  
+  tasks:
+    - name: Create directories for Traefik
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /opt/traefik
+        - /opt/traefik/config
+        - /opt/traefik/config/conf.d
+        - /opt/traefik/certs
+        - /opt/traefik/logs
+    
+    - name: Create Traefik static configuration
+      template:
+        src: templates/traefik.yml.j2
+        dest: /opt/traefik/traefik.yml
+        mode: '0644'
+    
+    - name: Create Traefik dynamic configuration
+      template:
+        src: templates/traefik-dynamic.yml.j2
+        dest: /opt/traefik/config/dynamic.yml
+        mode: '0644'
+    
+    - name: Create Docker Compose for Traefik
+      template:
+        src: templates/traefik.docker-compose.yml.j2
+        dest: /opt/traefik/docker-compose.yml
+        mode: '0644'
+    
+    - name: Deploy Traefik
+      community.docker.docker_compose:
+        project_src: /opt/traefik
+        state: present
+      register: traefik_output
+    
+    - name: Display Traefik endpoint
+      debug:
+        msg: "Traefik is available at http://{{ ansible_host }}:8080"
+      when: traefik_output.changed
+
+# Deploy Authentik
+- name: Deploy Authentik
+  hosts: docker_hosts
+  become: true
+  vars_files:
+    - ../vars/vault.yml
+  
+  tasks:
+    - name: Create directories for Authentik
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /opt/authentik
+        - /opt/authentik/custom-templates
+        - /opt/authentik/media
+        - /opt/authentik/certs
+    
+    - name: Create Authentik environment file
+      template:
+        src: templates/authentik.env.j2
+        dest: /opt/authentik/.env
+        mode: '0600'
+    
+    - name: Create Docker Compose for Authentik
+      template:
+        src: templates/authentik.docker-compose.yml.j2
+        dest: /opt/authentik/docker-compose.yml
+        mode: '0644'
+    
+    - name: Deploy Authentik
+      community.docker.docker_compose:
+        project_src: /opt/authentik
+        state: present
+      register: authentik_output
+    
+    - name: Display Authentik endpoint
+      debug:
+        msg: "Authentik is available at https://{{ authentik_domain }}"
+      when: authentik_output.changed
+
+# Deploy OpenWebUI
+- name: Deploy OpenWebUI
+  hosts: docker_hosts
+  become: true
+  vars_files:
+    - ../vars/vault.yml
+  
+  tasks:
+    - name: Create directories for OpenWebUI
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /opt/openwebui
+        - /opt/openwebui/tests
+        - /opt/openwebui/scripts
+    
+    - name: Create OpenWebUI environment file
+      template:
+        src: templates/openwebui.env.j2
+        dest: /opt/openwebui/.env
+        mode: '0600'
+    
+    - name: Create Docker Compose for OpenWebUI
+      template:
+        src: templates/openwebui.docker-compose.yml.j2
+        dest: /opt/openwebui/docker-compose.yml
+        mode: '0644'
+    
+    - name: Copy test scripts
+      template:
+        src: "templates/{{ item.src }}"
+        dest: "/opt/openwebui/tests/{{ item.dest }}"
+        mode: '0755'
+      loop:
+        - { src: 'connection_test.sh.j2', dest: 'connection_test.sh' }
+        - { src: 'db_schema_test.sh.j2', dest: 'db_schema_test.sh' }
+        - { src: 'api_test.sh.j2', dest: 'api_test.sh' }
+        - { src: 'ui_test.py.j2', dest: 'ui_test.py' }
+    
+    - name: Copy backup scripts
+      template:
+        src: "templates/{{ item.src }}"
+        dest: "/opt/openwebui/scripts/{{ item.dest }}"
+        mode: '0755'
+      loop:
+        - { src: 'backup-postgres.sh.j2', dest: 'backup-postgres.sh' }
+        - { src: 'backup-appdata.sh.j2', dest: 'backup-appdata.sh' }
+    
+    - name: Create backup directories
+      file:
+        path: "/var/backups/openwebui"
+        state: directory
+        mode: '0750'
+    
+    - name: Deploy OpenWebUI
+      community.docker.docker_compose:
+        project_src: /opt/openwebui
+        state: present
+      register: openwebui_output
+    
+    - name: Set up test automation with cron
+      cron:
+        name: "{{ item.name }}"
+        job: "{{ item.job }}"
+        hour: "{{ item.hour }}"
+        minute: "{{ item.minute }}"
+        weekday: "{{ item.weekday }}"
+      loop:
+        - name: OpenWebUI connection test
+          job: "/opt/openwebui/tests/connection_test.sh >> /var/log/openwebui-tests.log 2>&1"
+          hour: "2"
+          minute: "0"
+          weekday: "*"
+        - name: OpenWebUI database schema test
+          job: "/opt/openwebui/tests/db_schema_test.sh >> /var/log/openwebui-tests.log 2>&1"
+          hour: "2"
+          minute: "15"
+          weekday: "*"
+        - name: OpenWebUI API test
+          job: "/opt/openwebui/tests/api_test.sh >> /var/log/openwebui-tests.log 2>&1"
+          hour: "2"
+          minute: "30"
+          weekday: "*"
+        - name: OpenWebUI PostgreSQL backup
+          job: "/opt/openwebui/scripts/backup-postgres.sh >> /var/log/openwebui-backups.log 2>&1"
+          hour: "3"
+          minute: "0"
+          weekday: "*"
+        - name: OpenWebUI application data backup
+          job: "/opt/openwebui/scripts/backup-appdata.sh >> /var/log/openwebui-backups.log 2>&1"
+          hour: "3"
+          minute: "30"
+          weekday: "*"
+    
+    - name: Display OpenWebUI endpoint
+      debug:
+        msg: "OpenWebUI is available at https://{{ openwebui_domain }}"
+      when: openwebui_output.changed

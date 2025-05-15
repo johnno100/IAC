@@ -1,0 +1,7 @@
+# Path: ansible/roles/traefik/handlers/main.yml
+---
+- name: Restart Traefik
+  community.docker.docker_compose:
+    project_src: "{{ traefik_config_dir }}"
+    services: traefik
+    restarted: yes

@@ -1,0 +1,52 @@
+# inventory/production/group_vars/all.yml
+---
+# Network configuration
+management_network: 192.168.1.0/24
+cluster_network: 10.10.10.0/24
+storage_network: 10.20.20.0/24
+vlan_ids:
+  management: 10
+  cluster: 20
+  storage: 30
+  docker: 40
+  
+# Proxmox configuration
+proxmox_version: 7.4-1
+ceph_enabled: false
+ha_enabled: true
+quorum_votes:
+  pve1: 1
+  pve2: 1
+
+# Docker configuration
+docker_compose_version: 2.18.1
+docker_network: web
+portainer_version: latest
+portainer_domain: portainer.multiskilled.ai
+# Storage configuration
+storage_types:
+  local_lvm:
+    type: lvmthin
+    vgname: pve
+    thinpool: data
+  shared_nfs:
+    type: nfs
+    server: 192.168.1.100
+    export: /mnt/nfs/vms
+    
+# Monitoring configuration
+prometheus_retention_days: 15
+grafana_version: latest
+grafana_admin_password: "{{ vault_grafana_admin_password }}"
+
+# VM Templates
+ubuntu_template_id: 9000
+ubuntu_version: 22.04
+ubuntu_template_storage: local
+
+# Security and backup
+backup_retention_days: 7
+backup_storage: local
+ssh_allow_from:
+  - 192.168.1.0/24
+

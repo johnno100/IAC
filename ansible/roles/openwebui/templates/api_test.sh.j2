@@ -1,0 +1,27 @@
+# Path: ansible/roles/openwebui/templates/api_test.sh.j2
+---
+#!/bin/bash
+# API integration tests for OpenWebUI
+
+# Configuration
+OPENWEBUI_URL="{{ openwebui_url }}"
+API_ENDPOINT="${OPENWEBUI_URL}/api/health"
+
+echo "Starting OpenWebUI API tests at $(date)"
+echo "----------------------------------------"
+
+# Test health endpoint
+echo "Testing API health endpoint..."
+HEALTH_RESPONSE=$(curl -s -X GET "$API_ENDPOINT")
+
+if [[ "$HEALTH_RESPONSE" == *"status"*"ok"* ]]; then
+  echo "✅ API health check passed"
+else
+  echo "❌ API health check failed"
+  exit 1
+fi
+
+echo "----------------------------------------"
+echo "All API tests passed at $(date)"
+exit 0
+

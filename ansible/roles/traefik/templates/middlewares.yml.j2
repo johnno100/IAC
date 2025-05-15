@@ -1,0 +1,12 @@
+# Path: ansible/roles/traefik/templates/middlewares.yml.j2
+---
+http:
+  middlewares:
+{% for middleware in traefik_middlewares %}
+    {{ middleware.name }}:
+      {{ middleware.type }}:
+{% for key, value in middleware.config.items() %}
+        {{ key }}: {{ value | to_json }}
+{% endfor %}
+{% endfor %}
+

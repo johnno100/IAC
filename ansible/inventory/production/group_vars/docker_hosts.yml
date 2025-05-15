@@ -1,0 +1,35 @@
+# inventory/production/group_vars/docker_hosts.yml
+---
+# Docker host configuration
+docker_edition: ce
+docker_packages:
+  - docker-{{ docker_edition }}
+  - docker-{{ docker_edition }}-cli
+  - docker-compose-plugin
+
+docker_users:
+  - ubuntu
+  - admin
+
+docker_daemon_options:
+  exec-opts:
+    - native.cgroupdriver=systemd
+  log-driver: json-file
+  log-opts:
+    max-size: 100m
+  storage-driver: overlay2
+  metrics-addr: 0.0.0.0:9323
+  experimental: true
+
+# Network configuration
+docker_networks:
+  - name: web
+    driver: bridge
+    ipam_config:
+      - subnet: 172.18.0.0/16
+  - name: monitoring
+    driver: bridge
+  - name: backend
+    driver: bridge
+    internal: true
+

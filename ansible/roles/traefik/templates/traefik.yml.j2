@@ -1,0 +1,93 @@
+# Path: ansible/roles/traefik/templates/traefik.yml.j2
+---
+global:
+  checkNewVersion: {{ traefik_global_checknewversion | lower }}
+  sendAnonymousUsage: {{ traefik_global_sendanonymoususage | lower }}
+
+log:
+  level: "{{ traefik_log_level }}"
+  format: "{{ traefik_log_format }}"
+{% if traefik_log_filepath is defined %}
+  filePath: "{{ traefik_log_filepath }}"
+{% endif %}
+
+{% if traefik_accesslog_enabled %}
+accessLog:
+  format: "{{ traefik_accesslog_format }}"
+{% if traefik_accesslog_filepath is defined %}
+  filePath: "{{ traefik_accesslog_filepath }}"
+{% endif %}
+  bufferingSize: {{ traefik_accesslog_bufferingsize }}
+{% endif %}
+
+{% if traefik_api_enabled %}
+api:
+  dashboard: {{ traefik_api_dashboard | lower }}
+  insecure: {{ traefik_api_insecure | lower }}
+{% endif %}
+
+{% if traefik_metrics_prometheus_enabled %}
+metrics:
+  prometheus:
+    buckets:
+{% for bucket in traefik_metrics_prometheus_buckets %}
+      - {{ bucket }}
+{% endfor %}
+{% endif %}
+
+entryPoints:
+  web:
+    address: ":80"
+{% if traefik_acme_enabled and traefik_acme_challenge_type != "httpChallenge" %}
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+{% endif %}
+
+  websecure:
+    address: ":443"
+
+{% if traefik_provider_docker_enabled %}
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: {{ traefik_provider_docker_exposedbydefault | lower }}
+{% if traefik_provider_docker_network is defined %}
+    network: "{{ traefik_provider_docker_network }}"
+{% endif %}
+{% endif %}
+
+{% if traefik_provider_file_enabled %}
+  file:
+    directory: "{{ traefik_provider_file_directory }}"
+    watch: {{ traefik_provider_file_watch | lower }}
+{% endif %}
+
+{% if traefik_acme_enabled %}
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "{{ traefik_acme_email }}"
+      storage: "{{ traefik_acme_storage_file }}"
+{% if traefik_acme_staging %}
+      caServer: "https://acme-staging-v02.api.letsencrypt.org/directory"
+{% endif %}
+{% if traefik_acme_challenge_type == "httpChallenge" %}
+      httpChallenge:
+        entryPoint: web
+{% elif traefik_acme_challenge_type == "tlsChallenge" %}
+      tlsChallenge: {}
+{% elif traefik_acme_challenge_type == "dnsChallenge" %}
+      dnsChallenge:
+        provider: {{ traefik_acme_dnschallenge_provider }}
+{% if traefik_acme_dnschallenge_resolvers is defined %}
+        resolvers:
+{% for resolver in traefik_acme_dnschallenge_resolvers %}
+          - "{{ resolver }}"
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endif %}
+
