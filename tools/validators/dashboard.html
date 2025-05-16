@@ -1,0 +1,149 @@
+<!-- tools/validators/dashboard.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deployment Readiness Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        .dashboard { max-width: 1200px; margin: 0 auto; }
+        .section { margin-bottom: 30px; border: 1px solid #ddd; border-radius: 5px; padding: 15px; }
+        .section-title { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .status-ok { color: green; }
+        .status-warn { color: orange; }
+        .status-error { color: red; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #ddd; }
+        tr:nth-child(even) { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <h1>Deployment Readiness Dashboard</h1>
+        <p>Generated on <span id="date"></span></p>
+        
+        <div class="section">
+            <h2 class="section-title">Environment Status</h2>
+            <table>
+                <tr>
+                    <th>Component</th>
+                    <th>Status</th>
+                    <th>Details</th>
+                </tr>
+                <tr>
+                    <td>Network Connectivity</td>
+                    <td><span class="status-ok">✓ OK</span></td>
+                    <td>All hosts reachable</td>
+                </tr>
+                <tr>
+                    <td>DNS Resolution</td>
+                    <td><span class="status-ok">✓ OK</span></td>
+                    <td>All services resolvable</td>
+                </tr>
+                <tr>
+                    <td>Resources</td>
+                    <td><span class="status-warn">⚠ Warning</span></td>
+                    <td>PVE1 CPU usage > 70%</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h2 class="section-title">Configuration Changes</h2>
+            <table>
+                <tr>
+                    <th>Component</th>
+                    <th>Changes</th>
+                    <th>Risk</th>
+                </tr>
+                <tr>
+                    <td>Network</td>
+                    <td>5 additions, 0 removals, 2 modifications</td>
+                    <td><span class="status-ok">Low</span></td>
+                </tr>
+                <tr>
+                    <td>Proxmox</td>
+                    <td>1 node addition, cluster formation</td>
+                    <td><span class="status-warn">Medium</span></td>
+                </tr>
+                <tr>
+                    <td>Services</td>
+                    <td>7 new services, 0 removals</td>
+                    <td><span class="status-ok">Low</span></td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h2 class="section-title">Dependency Map</h2>
+            <pre id="dependency-map">Loading...</pre>
+        </div>
+        
+        <div class="section">
+            <h2 class="section-title">Deployment Readiness</h2>
+            <table>
+                <tr>
+                    <th>Check</th>
+                    <th>Status</th>
+                </tr>
+                <tr>
+                    <td>Validation Playbook</td>
+                    <td><span class="status-ok">✓ Passed</span></td>
+                </tr>
+                <tr>
+                    <td>Backup Verification</td>
+                    <td><span class="status-ok">✓ Passed</span></td>
+                </tr>
+                <tr>
+                    <td>Rollback Readiness</td>
+                    <td><span class="status-ok">✓ Passed</span></td>
+                </tr>
+                <tr>
+                    <td>Overall Readiness</td>
+                    <td><span class="status-warn">⚠ Verification Required</span></td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h2 class="section-title">Actions</h2>
+            <button onclick="alert('This would start the deployment process')">Start Deployment</button>
+            <button onclick="window.print()">Print Report</button>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('date').innerText = new Date().toLocaleString();
+        
+        // In a real implementation, this would be generated from your data
+        const dependencyMap = `
+Network:
+  ├── core-switch-01
+  │   ├── VLAN 10 (Management)
+  │   ├── VLAN 20 (Cluster)
+  │   ├── VLAN 30 (Storage)
+  │   ├── VLAN 40 (Docker)
+  │   └── VLAN 50 (AI-Workloads)
+  └── firewall-01
+      ├── allow-http
+      ├── allow-https
+      └── allow-ssh
+
+Proxmox Cluster:
+  ├── pve1 (existing)
+  └── pve2 (T440)
+
+Services:
+  ├── traefik
+  │   └── depends on: [core-switch-01, VLAN 40]
+  ├── authentik
+  │   └── depends on: [traefik]
+  └── openwebui
+      └── depends on: [traefik, authentik, VLAN 50]
+`;
+        
+        document.getElementById('dependency-map').innerText = dependencyMap;
+    </script>
+</body>
+</html>

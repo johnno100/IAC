@@ -1,0 +1,93 @@
+# ansible/playbooks/pre-deployment-validation.yml
+---
+- name: Network Configuration Validation
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Ping All Hosts
+      ping:
+      register: ping_result
+      ignore_errors: true
+      
+    - name: Report Unreachable Hosts
+      debug:
+        msg: "Host {{ inventory_hostname }} is not reachable"
+      when: ping_result is failed
+      
+    - name: Check Network Connectivity Between Hosts
+      script: ../tools/validators/check_connectivity.sh {{ groups['all'] | join(' ') }}
+      args:
+        executable: /bin/bash
+      register: connectivity_check
+      when: inventory_hostname == groups['all'][0]
+      
+    - name: Display Connectivity Matrix
+      debug:
+        var: connectivity_check.stdout_lines
+      when: inventory_hostname == groups['all'][0]
+
+- name: DNS Resolution Check
+  hosts: all
+  tasks:
+    - name: Check DNS Resolution
+      command: nslookup {{ item }}
+      loop:
+        - "{{ domain }}"
+        - "{{ traefik_dashboard_domain | default('traefik.' + domain) }}"
+        - "{{ authentik_domain | default('auth.' + domain) }}"
+        - "{{ openwebui_domain | default('ai.' + domain) }}"
+      register: dns_check
+      ignore_errors: true
+      
+    - name: Report DNS Issues
+      debug:
+        msg: "DNS resolution failed for {{ item.item }}"
+      loop: "{{ dns_check.results }}"
+      when: item.rc != 0
+
+- name: Resource Availability Check
+  hosts: proxmox_cluster
+  tasks:
+    - name: Check CPU Resources
+      shell: grep -c processor /proc/cpuinfo
+      register: cpu_count
+      
+    - name: Check Memory Resources
+      shell: free -m | grep Mem | awk '{print $2}'
+      register: memory_total
+      
+    - name: Check Disk Space
+      shell: df -h / | tail -1 | awk '{print $4}'
+      register: disk_space
+      
+    - name: Verify Sufficient Resources
+      assert:
+        that:
+          - cpu_count.stdout|int >= 4
+          - memory_total.stdout|int >= 8192
+          - disk_space.stdout|regex_replace('G', '')|float >= 20.0
+        fail_msg: "Insufficient resources for deployment on {{ inventory_hostname }}"
+        success_msg: "Resource check passed on {{ inventory_hostname }}"
+
+- name: Network Path Validation
+  hosts: docker_hosts
+  tasks:
+    - name: Verify Connections to External Services
+      uri:
+        url: "{{ item }}"
+        method: HEAD
+        validate_certs: no
+        status_code: 200,301,302,403
+      register: connectivity_result
+      ignore_errors: true
+      loop:
+        - https://registry.hub.docker.com
+        - https://auth.docker.io
+        - https://github.com
+        - https://api.github.com
+      
+    - name: Report Connectivity Issues
+      debug:
+        msg: "Cannot connect to {{ item.item }}"
+      loop: "{{ connectivity_result.results }}"
+      when: item.status is defined and item.status != 200 and item.status != 301 and item.status != 302 and item.status != 403

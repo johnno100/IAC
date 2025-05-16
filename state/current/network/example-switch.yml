@@ -1,0 +1,24 @@
+# state/current/network/example-switch.yml
+---
+device:
+  name: "core-switch-01"
+  model: "Dell S4048-ON"
+  location: "Rack 4, U10-11"
+
+vlans:
+  - id: 10
+    name: Management
+    subnet: 192.168.1.0/24
+  - id: 20
+    name: Cluster
+    subnet: 10.10.10.0/24
+  
+interfaces:
+  - name: "TenGigabitEthernet1/1"
+    description: "Uplink to Router"
+    vlan: "trunk"
+    vlans: [10, 20, 30, 40]
+  - name: "TenGigabitEthernet1/2"
+    description: "PVE1 Primary"
+    vlan: "trunk"
+    vlans: [10, 20, 30, 40]
