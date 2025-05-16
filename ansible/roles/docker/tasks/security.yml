@@ -1,0 +1,70 @@
+# Path: ansible/roles/docker/tasks/security.yml
+---
+- name: Create Docker security directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /etc/docker
+    - /etc/docker/seccomp
+
+- name: Create Docker seccomp profile
+  template:
+    src: docker-seccomp-profile.json.j2
+    dest: /etc/docker/seccomp-profile.json
+    mode: '0644'
+  notify: Restart Docker
+
+- name: Install Docker Bench Security
+  get_url:
+    url: https://raw.githubusercontent.com/docker/docker-bench-security/master/docker-bench-security.sh
+    dest: /usr/local/bin/docker-bench-security.sh
+    mode: '0755'
+
+- name: Configure Docker Bench Security cron job
+  cron:
+    name: "Docker security scan"
+    job: "/usr/local/bin/docker-bench-security.sh > /var/log/docker-security-scan-$(date +\\%Y\\%m\\%d).log 2>&1"
+    hour: "{{ docker_security_scans.cron_schedule.split(' ')[1] }}"
+    minute: "{{ docker_security_scans.cron_schedule.split(' ')[0] }}"
+    weekday: "{{ docker_security_scans.cron_schedule.split(' ')[4] }}"
+  when: docker_security_scans is defined and docker_security_scans.cron_schedule is defined
+
+- name: Install Trivy container scanner
+  get_url:
+    url: https://github.com/aquasecurity/trivy/releases/latest/download/trivy_Linux-64bit.tar.gz
+    dest: /tmp/trivy.tar.gz
+    mode: '0644'
+
+- name: Extract Trivy
+  unarchive:
+    src: /tmp/trivy.tar.gz
+    dest: /usr/local/bin
+    remote_src: yes
+    extra_opts:
+      - --strip-components=0
+    creates: /usr/local/bin/trivy
+
+- name: Create Trivy scan script
+  template:
+    src: scan-containers.sh.j2
+    dest: /usr/local/bin/scan-containers.sh
+    mode: '0755'
+  when: docker_security_scans is defined and docker_security_scans.scan_tools is defined and 'trivy' in docker_security_scans.scan_tools
+
+- name: Configure Trivy scan cron job
+  cron:
+    name: "Trivy container scan"
+    job: "/usr/local/bin/scan-containers.sh > /var/log/trivy-scan-$(date +\\%Y\\%m\\%d).log 2>&1"
+    hour: "{{ docker_security_scans.cron_schedule.split(' ')[1] | int + 1 }}"
+    minute: "{{ docker_security_scans.cron_schedule.split(' ')[0] }}"
+    weekday: "{{ docker_security_scans.cron_schedule.split(' ')[4] }}"
+  when: docker_security_scans is defined and docker_security_scans.cron_schedule is defined and docker_security_scans.scan_tools is defined and 'trivy' in docker_security_scans.scan_tools
+
+- name: Create log rotation for security scans
+  template:
+    src: docker-security-logs.conf.j2
+    dest: /etc/logrotate.d/docker-security
+    mode: '0644'
+  when: docker_security_scans is defined and docker_security_scans.retention_days is defined

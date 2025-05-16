@@ -17,9 +17,25 @@ docker_daemon_options:
   log-driver: json-file
   log-opts:
     max-size: 100m
+    max-file: "3"
   storage-driver: overlay2
   metrics-addr: 0.0.0.0:9323
   experimental: true
+  # Security hardening options
+  selinux-enabled: true
+  seccomp-profile: /etc/docker/seccomp-profile.json
+  security-opts:
+    - "no-new-privileges:true"
+    - "apparmor=docker-default"
+  userns-remap: "default"
+  live-restore: true
+  userland-proxy: false
+  default-address-pools:
+    - base: 172.16.0.0/16
+      size: 24
+  # Registry mirror configuration
+  registry-mirrors:
+    - "https://registry-1.docker.io"
 
 # Network configuration
 docker_networks:
@@ -27,9 +43,30 @@ docker_networks:
     driver: bridge
     ipam_config:
       - subnet: 172.18.0.0/16
+    options:
+      com.docker.network.bridge.enable_icc: "false"
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+      com.docker.network.driver.mtu: "1500"
   - name: monitoring
     driver: bridge
+    options:
+      com.docker.network.bridge.enable_icc: "false"
+      com.docker.network.bridge.enable_ip_masquerade: "true"
   - name: backend
     driver: bridge
     internal: true
+    options:
+      com.docker.network.bridge.enable_icc: "false"
 
+# Security Scan Configuration
+docker_security_scans:
+  cron_schedule: "0 2 * * *"  # Run scans daily at 2am
+  retention_days: 30
+  scan_tools:
+    - trivy
+    - docker-bench-security
+
+# Resource Limits & Management
+docker_default_container_limits:
+  memory: 512m
+  cpu: 0.5
