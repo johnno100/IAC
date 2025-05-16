@@ -1,0 +1,13 @@
+# Path: templates/docker-security-logs.conf.j2
+/var/log/docker-security-scan-*.log
+/var/log/trivy-scan-*.log
+/var/log/container-scans/*.txt
+{
+    daily
+    rotate {{ docker_security_scans.retention_days | default(30) }}
+    missingok
+    notifempty
+    compress
+    delaycompress
+    create 0644 root root
+}

@@ -11,72 +11,108 @@ cluster_config:
   quorum:
     provider: corosync_votequorum
     expected_votes: 2
+    two_node: 1  # Added for 2-node cluster to prevent split-brain issues
   logging:
     to_syslog: yes
   nodelist:
-    - name: pve1
+    - name: mskai
       nodeid: 1
-      ring0_addr: 192.168.1.101
-    - name: pve2
+      ring0_addr: 192.168.0.234
+    - name: pve
       nodeid: 2
-      ring0_addr: 192.168.1.102
+      ring0_addr: 192.168.0.254
 
 # Network interfaces configuration
 network_interfaces:
-  pve1:
+  mskai:
     - name: lo
       config:
         address: 127.0.0.1
         netmask: 255.0.0.0
     - name: eno1
       config:
-        address: 192.168.1.101
+        # No IP address on physical interface when using bonds
+        options:
+          - "mtu 9000"
+    - name: eno2
+      config:
+        # No IP address on physical interface when using bonds
+        options:
+          - "mtu 9000"
+    - name: bond0
+      config:
+        address: 192.168.0.234
         netmask: 255.255.255.0
         gateway: 192.168.1.1
-    - name: eno2
+        bond-slaves: eno1
+        bond-miimon: 100
+        bond-mode: active-backup
+        options:
+          - "bond-primary eno1"
+    - name: bond1
       config:
         address: 10.10.10.1
         netmask: 255.255.255.0
+        bond-slaves: eno2
+        bond-miimon: 100
+        bond-mode: active-backup
     - name: vmbr0
       config:
-        address: 192.168.1.101
+        address: 192.168.0.234
         netmask: 255.255.255.0
-        bridge_ports: eno1
+        bridge_ports: bond0
         bridge_stp: off
         bridge_fd: 0
     - name: vmbr1
       config:
         address: 10.10.10.1
         netmask: 255.255.255.0
-        bridge_ports: eno2
+        bridge_ports: bond1
         bridge_stp: off
         bridge_fd: 0
-  pve2:
+  pve:
     - name: lo
       config:
         address: 127.0.0.1
         netmask: 255.0.0.0
     - name: eno1
       config:
-        address: 192.168.1.102
+        # No IP address on physical interface when using bonds
+        options:
+          - "mtu 9000"
+    - name: eno2
+      config:
+        # No IP address on physical interface when using bonds
+        options:
+          - "mtu 9000"
+    - name: bond0
+      config:
+        address: 192.168.0.254
         netmask: 255.255.255.0
         gateway: 192.168.1.1
-    - name: eno2
+        bond-slaves: eno1
+        bond-miimon: 100
+        bond-mode: active-backup
+        options:
+          - "bond-primary eno1"
+    - name: bond1
       config:
         address: 10.10.10.2
         netmask: 255.255.255.0
+        bond-slaves: eno2
+        bond-miimon: 100
+        bond-mode: active-backup
     - name: vmbr0
       config:
-        address: 192.168.1.102
+        address: 192.168.0.254
         netmask: 255.255.255.0
-        bridge_ports: eno1
+        bridge_ports: bond0
         bridge_stp: off
         bridge_fd: 0
     - name: vmbr1
       config:
         address: 10.10.10.2
         netmask: 255.255.255.0
-        bridge_ports: eno2
+        bridge_ports: bond1
         bridge_stp: off
         bridge_fd: 0
-

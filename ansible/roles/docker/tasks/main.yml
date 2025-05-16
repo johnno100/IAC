@@ -1,0 +1,2 @@
+- name: Include security tasks
+  include_tasks: security.yml
