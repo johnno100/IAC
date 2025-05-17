@@ -1,0 +1,24 @@
+# state/service-network-mapping.yml
+---
+network_dependencies:
+  - service: "traefik"
+    depends_on:
+      - device: "core-switch-01"
+        interfaces: ["TenGigabitEthernet1/2", "TenGigabitEthernet1/3"]
+        vlans: [10, 40]
+      - device: "firewall-01"
+        rules: ["allow-http", "allow-https"]
+        
+  - service: "authentik"
+    depends_on:
+      - device: "core-switch-01"
+        interfaces: ["TenGigabitEthernet1/2", "TenGigabitEthernet1/3"]
+        vlans: [10, 40]
+        
+  - service: "openwebui"
+    depends_on:
+      - device: "core-switch-01"
+        interfaces: ["TenGigabitEthernet1/3", "TenGigabitEthernet1/4"]
+        vlans: [10, 40, 50]
+      - service: "traefik"
+      - service: "authentik"

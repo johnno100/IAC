@@ -1,0 +1,34 @@
+# state/target/network/example-switch.yml
+---
+device:
+  name: "core-switch-01"
+  model: "Dell S4048-ON"
+  location: "Rack 4, U10-11"
+
+vlans:
+  - id: 10
+    name: Management
+    subnet: 192.168.1.0/24
+  - id: 20
+    name: Cluster
+    subnet: 10.10.10.0/24
+  - id: 30
+    name: Storage
+    subnet: 10.20.20.0/24
+  - id: 40
+    name: Docker
+    subnet: 172.16.0.0/16  # New expanded Docker network
+  - id: 50
+    name: AI-Workloads
+    subnet: 10.30.30.0/24  # New VLAN for AI workloads
+  
+interfaces:
+  # Same interfaces as current state, plus:
+  - name: "TenGigabitEthernet1/3"
+    description: "T440 Primary"
+    vlan: "trunk"
+    vlans: [10, 20, 30, 40, 50]
+  - name: "TenGigabitEthernet1/4"
+    description: "T440 Secondary"
+    vlan: "trunk"
+    vlans: [10, 20, 30, 40, 50]

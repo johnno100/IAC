@@ -1,0 +1,29 @@
+# ansible/playbooks/rollback/network-rollback.yml
+---
+- name: Network Configuration Rollback
+  hosts: network_devices
+  gather_facts: false
+  vars:
+    backup_dir: "{{ playbook_dir }}/../../backups/network"
+  tasks:
+    - name: Check for configuration backup
+      stat:
+        path: "{{ backup_dir }}/{{ inventory_hostname }}-pre-deployment.conf"
+      register: backup_file
+      delegate_to: localhost
+      
+    - name: Restore switch configuration
+      ios_config:
+        src: "{{ backup_dir }}/{{ inventory_hostname }}-pre-deployment.conf"
+      when: backup_file.stat.exists
+      register: restore_result
+      
+    - name: Report rollback status
+      debug:
+        msg: "Rollback for {{ inventory_hostname }} completed successfully"
+      when: restore_result is success
+      
+    - name: Report rollback failure
+      debug:
+        msg: "Rollback for {{ inventory_hostname }} failed - manual intervention required"
+      when: not backup_file.stat.exists or restore_result is failed
