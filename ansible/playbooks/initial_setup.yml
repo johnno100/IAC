@@ -223,7 +223,7 @@
         mode: '0644'
         
     - name: Deploy Uptime Kuma
-      community.docker.docker_compose:
+      community.docker.docker_compose_v2:
         project_src: /opt/uptime-kuma
         state: present
       register: uptime_kuma_output
