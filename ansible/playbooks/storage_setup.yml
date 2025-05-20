@@ -1,0 +1,49 @@
+# ansible/playbooks/storage-setup.yml
+---
+- name: Configure Proxmox Storage
+  hosts: proxmox_hosts
+  become: true
+  gather_facts: true
+  
+  tasks:
+    - name: Get disk information
+      parted:
+        device: /dev/{{ item }}
+        unit: GiB
+      register: disk_info
+      with_items: "{{ storage_disks | default(['sda']) }}"
+      ignore_errors: true
+      changed_when: false
+      
+    - name: Display disk information
+      debug:
+        var: disk_info
+        
+    - name: Create LVM physical volumes
+      lvg:
+        vg: "{{ item.vg_name }}"
+        pvs: "/dev/{{ item.disk }}"
+      loop: "{{ storage_lvms | default([]) }}"
+      when: storage_lvms is defined
+      
+    - name: Create Proxmox storage configurations
+      template:
+        src: templates/storage-config.j2
+        dest: /etc/pve/storage.cfg.d/{{ item.name }}.cfg
+        mode: '0644'
+      loop: "{{ proxmox_storages | default([]) }}"
+      when: proxmox_storages is defined
+      
+    - name: Configure Proxmox datacenter storage
+      shell: pvesh set /storage/{{ item.name }} --content {{ item.content }}
+      loop: "{{ proxmox_storages | default([]) }}"
+      when: proxmox_storages is defined and item.content is defined
+      changed_when: true
+      
+    - name: Create required directories for storage
+      file:
+        path: "{{ item.path }}"
+        state: directory
+        mode: '0755'
+      loop: "{{ proxmox_directories | default([]) }}"
+      when: proxmox_directories is defined

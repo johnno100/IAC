@@ -1,0 +1,98 @@
+version: '3.4'
+
+services:
+  postgresql:
+    image: postgres:13-alpine
+    container_name: authentik-postgres
+    restart: unless-stopped
+    volumes:
+      - "authentik_postgresql:/var/lib/postgresql/data"
+    environment:
+      - POSTGRES_PASSWORD={{ authentik_postgresql_password }}
+      - POSTGRES_USER=authentik
+      - POSTGRES_DB=authentik
+    networks:
+      - {{ docker_network_name }}
+
+  redis:
+    image: redis:alpine
+    container_name: authentik-redis
+    restart: unless-stopped
+    networks:
+      - {{ docker_network_name }}
+
+  server:
+    image: ghcr.io/goauthentik/server:{{ authentik_version }}
+    container_name: authentik-server
+    restart: unless-stopped
+    command: server
+    environment:
+      AUTHENTIK_REDIS__HOST: redis
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: {{ authentik_postgresql_password }}
+      AUTHENTIK_SECRET_KEY: {{ authentik_secret_key }}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      AUTHENTIK_PORT: 9000
+      AUTHENTIK_ADMIN_TOKEN: {{ authentik_admin_token }}
+      AUTHENTIK_BOOTSTRAP_EMAIL: {{ authentik_admin_email }}
+      AUTHENTIK_BOOTSTRAP_PASSWORD: {{ authentik_admin_password }}
+    volumes:
+      - authentik_media:/media
+      - authentik_custom_templates:/templates
+    networks:
+      - {{ docker_network_name }}
+    depends_on:
+      - postgresql
+      - redis
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.authentik.rule=Host(`{{ authentik_domain }}`)"
+      - "traefik.http.routers.authentik.entrypoints=websecure"
+      - "traefik.http.routers.authentik.tls.certresolver=letsencrypt"
+      - "traefik.http.services.authentik.loadbalancer.server.port=9000"
+
+  worker:
+    image: ghcr.io/goauthentik/server:{{ authentik_version }}
+    container_name: authentik-worker
+    restart: unless-stopped
+    command: worker
+    environment:
+      AUTHENTIK_REDIS__HOST: redis
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: {{ authentik_postgresql_password }}
+      AUTHENTIK_SECRET_KEY: {{ authentik_secret_key }}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      WORKERS: 2
+    # CPU and memory limits for the worker
+    # These are optional but recommended
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+    volumes:
+      - authentik_media:/media
+      - authentik_certs:/certs
+    networks:
+      - {{ docker_network_name }}
+    depends_on:
+      - postgresql
+      - redis
+
+volumes:
+  authentik_postgresql:
+    name: authentik_postgresql
+  authentik_media:
+    name: authentik_media
+  authentik_certs:
+    name: authentik_certs
+  authentik_custom_templates:
+    name: authentik_custom_templates
+
+networks:
+  {{ docker_network_name }}:
+    external: true

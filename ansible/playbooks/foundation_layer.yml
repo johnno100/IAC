@@ -1,0 +1,26 @@
+# ansible/playbooks/foundation-layer.yml
+---
+- name: Set up Foundation Layer for T440 Proxmox Infrastructure
+  hosts: localhost
+  gather_facts: false
+  
+  tasks:
+    - name: Display implementation plan
+      debug:
+        msg: |
+          Starting Foundation Layer implementation for T440 Proxmox Infrastructure
+          
+          Steps:
+          1. Proxmox Base Setup
+          2. Network Configuration
+          3. Storage Configuration
+          4. Cluster Setup
+          5. Security Hardening
+          
+          This playbook will automate the entire Foundation Layer setup.
+
+- import_playbook: proxmox-base-setup.yml
+- import_playbook: network-setup.yml
+- import_playbook: storage-setup.yml
+- import_playbook: cluster-setup.yml
+- import_playbook: security-hardening.yml

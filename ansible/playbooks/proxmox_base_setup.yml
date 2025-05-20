@@ -1,0 +1,73 @@
+# ansible/playbooks/proxmox-base-setup.yml
+---
+- name: Configure Proxmox Base System
+  hosts: proxmox_hosts
+  become: true
+  gather_facts: true
+  
+  tasks:
+    - name: Update package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+        
+    - name: Install required packages
+      apt:
+        name:
+          - python3-pip
+          - python3-proxmoxer
+          - jq
+          - net-tools
+          - ethtool
+          - bridge-utils
+          - ifupdown2
+          - chrony
+          - htop
+          - iotop
+          - iftop
+          - nfs-common
+          - lvm2
+          - ceph-common
+        state: present
+        
+    - name: Configure Proxmox repositories
+      template:
+        src: templates/proxmox-repos.list.j2
+        dest: /etc/apt/sources.list.d/pve-enterprise.list
+        mode: '0644'
+      notify: Update apt cache
+      
+    - name: Configure hosts file
+      template:
+        src: templates/hosts.j2
+        dest: /etc/hosts
+        mode: '0644'
+        backup: yes
+        
+    - name: Configure chrony for time synchronization
+      template:
+        src: templates/chrony.conf.j2
+        dest: /etc/chrony/chrony.conf
+        mode: '0644'
+        backup: yes
+      notify: Restart chrony
+      
+    - name: Set system timezone
+      timezone:
+        name: "{{ proxmox_timezone | default('UTC') }}"
+    
+    - name: Set up SSH keys for root
+      authorized_key:
+        user: root
+        state: present
+        key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+        
+  handlers:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        
+    - name: Restart chrony
+      service:
+        name: chrony
+        state: restarted

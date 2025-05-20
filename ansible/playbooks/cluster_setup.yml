@@ -1,0 +1,30 @@
+# ansible/playbooks/cluster-setup.yml
+---
+- name: Configure Proxmox Cluster
+  hosts: proxmox_hosts
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Create Proxmox cluster (on single node)
+      command: pvecm create {{ cluster_name }}
+      args:
+        creates: /etc/pve/corosync.conf
+      when: inventory_hostname == groups['proxmox_hosts'][0] and (groups['proxmox_hosts']|length == 1)
+      
+    - name: Configure cluster settings
+      template:
+        src: templates/pve-datacenter.cfg.j2
+        dest: /etc/pve/datacenter.cfg
+        mode: '0644'
+        backup: yes
+      when: inventory_hostname == groups['proxmox_hosts'][0]
+      
+    - name: Configure resource pools
+      shell: pvesh create /pools --poolid {{ item.name }} --comment "{{ item.comment }}"
+      args:
+        creates: /etc/pve/user.cfg
+      loop:
+        - { name: "production", comment: "Production VMs and Containers" }
+        - { name: "security", comment: "Security-related VMs" }
+        - { name: "management", comment: "Management VMs" }
+      when: inventory_hostname == groups['proxmox_hosts'][0]
