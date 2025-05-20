@@ -10,7 +10,7 @@ openwebui_log_dir: "/var/log"
 
 # Network configuration
 openwebui_network: "web"
-openwebui_domain: "openwebui.example.com"
+openwebui_domain: "openwebui.multiskilled.ai"
 openwebui_url: "https://{{ openwebui_domain }}"
 openwebui_validate_certs: no
 

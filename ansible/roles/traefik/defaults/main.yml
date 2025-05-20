@@ -19,7 +19,7 @@ traefik_dashboard_port: 8080
 
 # Traefik dashboard
 traefik_dashboard_enabled: true
-traefik_dashboard_domain: "traefik.example.com"
+traefik_dashboard_domain: "traefik.multiskilled.ai"
 traefik_dashboard_auth_enabled: true
 traefik_dashboard_users: []
 
@@ -30,7 +30,7 @@ traefik_api_insecure: false
 
 # Let's Encrypt configuration
 traefik_acme_enabled: true
-traefik_acme_email: "admin@example.com"
+traefik_acme_email: "admin@multiskilled.ai"
 traefik_acme_staging: false
 traefik_acme_challenge_type: "tlsChallenge"
 traefik_acme_storage_file: "/letsencrypt/acme.json"

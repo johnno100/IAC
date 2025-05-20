@@ -138,7 +138,7 @@ systemctl start semaphore
 
 ```bash
 # Generate SSH key for GitHub access
-ssh-keygen -t ed25519 -f ./keys/github-key -C "semaphore@example.com"
+ssh-keygen -t ed25519 -f ./keys/github-key -C "semaphore@multiskilled.ai"
 chmod 600 ./keys/github-key
 
 # Display the public key to add to GitHub

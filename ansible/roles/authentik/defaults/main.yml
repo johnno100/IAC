@@ -12,7 +12,7 @@ authentik_backups_dir: "{{ authentik_config_dir }}/backups"
 
 # Network configuration
 authentik_network: "web"
-authentik_domain: "auth.example.com"
+authentik_domain: "auth.multiskilled.ai"
 authentik_validate_certs: no
 authentik_port: 9000
 
@@ -42,7 +42,7 @@ authentik_traefik_integration: true
 authentik_middleware_name: "authentik-forward-auth"
 
 # Admin settings
-authentik_admin_email: "admin@example.com"
+authentik_admin_email: "admin@multiskilled.ai"
 
 # Error reporting
 authentik_error_reporting_enabled: false

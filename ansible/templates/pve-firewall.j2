@@ -1,0 +1,14 @@
+# ansible/templates/pve-firewall.j2
+[OPTIONS]
+enable: 1
+log_level_in: nolog
+log_level_out: nolog
+tcp_flags_log_level: nolog
+icmp_log_level: nolog
+
+{% if firewall_rules is defined %}
+[RULES]
+{% for rule in firewall_rules %}
+{{ rule.action }} {{ rule.source }} {{ rule.dest }} {{ rule.proto }} {% if rule.dport is defined %}{{ rule.dport }}{% else %}0:65535{% endif %} 
+{% endfor %}
+{% endif %}

@@ -1,0 +1,63 @@
+# ansible/playbooks/network-setup.yml
+---
+- name: Configure Proxmox Network
+  hosts: proxmox_hosts
+  become: true
+  gather_facts: true
+  
+  tasks:
+    - name: Backup current network configuration
+      copy:
+        src: /etc/network/interfaces
+        dest: /etc/network/interfaces.bak
+        remote_src: yes
+        mode: '0644'
+      
+    - name: Configure network interfaces
+      template:
+        src: templates/interfaces.j2
+        dest: /etc/network/interfaces
+        mode: '0644'
+        backup: yes
+      vars:
+        node_config: "{{ network_interfaces[inventory_hostname] }}"
+      when: network_interfaces is defined and network_interfaces[inventory_hostname] is defined
+      notify: Restart networking
+      
+    - name: Setup VLANs
+      template:
+        src: templates/vlan-interfaces.j2
+        dest: /etc/network/interfaces.d/vlans
+        mode: '0644'
+      when: vlans is defined
+      notify: Restart networking
+      
+    - name: Configure firewall
+      template:
+        src: templates/pve-firewall.j2
+        dest: /etc/pve/firewall/cluster.fw
+        mode: '0644'
+      notify: Restart pve-firewall
+      
+    - name: Enable firewall
+      command: pve-firewall enable
+      changed_when: false
+      
+    - name: Apply network changes (may disconnect)
+      meta: flush_handlers
+      
+    - name: Wait for server to come back
+      wait_for_connection:
+        delay: 10
+        timeout: 300
+      
+  handlers:
+    - name: Restart networking
+      service:
+        name: networking
+        state: restarted
+        
+    - name: Restart pve-firewall
+      service:
+        name: pve-firewall
+        state: restarted

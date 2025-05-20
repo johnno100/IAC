@@ -1,0 +1,113 @@
+# ansible/inventory/production/group_vars/proxmox_hosts.yml
+---
+# Proxmox global settings
+proxmox_timezone: "UTC"
+cluster_name: "ai-cluster"
+
+# Network interfaces configuration
+network_interfaces:
+  pve:
+    - name: lo
+      config:
+        address: 127.0.0.1
+        netmask: 255.0.0.0
+    - name: eno1
+      config:
+        # No IP address on physical interface when using bonds
+        options:
+          - "mtu 9000"
+    - name: eno2
+      config:
+        # No IP address on physical interface when using bonds
+        options:
+          - "mtu 9000"
+    - name: bond0
+      config:
+        address: 192.168.0.200  # Replace with your T440 IP
+        netmask: 255.255.255.0
+        gateway: 192.168.0.1
+        bond-slaves: eno1
+        bond-miimon: 100
+        bond-mode: active-backup
+        options:
+          - "bond-primary eno1"
+    - name: vmbr0
+      config:
+        address: 192.168.0.200  # Replace with your T440 IP
+        netmask: 255.255.255.0
+        bridge_ports: bond0
+        bridge_stp: off
+        bridge_fd: 0
+
+# VLANs configuration
+vlans:
+  - id: 10
+    name: "Management"
+    interface: "vmbr0"
+    address: "192.168.10.1/24"
+  - id: 20
+    name: "Security"
+    interface: "vmbr0"
+    address: "192.168.20.1/24"
+  - id: 30
+    name: "Storage"
+    interface: "vmbr0"
+    address: "192.168.30.1/24"
+  - id: 40
+    name: "Docker"
+    interface: "vmbr0"
+    address: "192.168.40.1/24"
+  - id: 50
+    name: "AI-Workloads"
+    interface: "vmbr0"
+    address: "192.168.50.1/24"
+
+# Storage configuration
+storage_disks:
+  - sda
+  - sdb  # Add more disks as needed
+
+storage_lvms:
+  - vg_name: pve
+    disk: sda2
+  - vg_name: data
+    disk: sdb  # Second disk for data
+
+proxmox_storages:
+  - name: local-lvm
+    type: lvmthin
+    content: images,rootdir
+    vgname: pve
+    thinpool: data
+  - name: local-zfs
+    type: zfspool
+    content: images,rootdir
+    pool: rpool/data
+
+# Security settings
+proxmox_allowed_networks:
+  - 127.0.0.1
+  - 192.168.0.0/24
+  - 192.168.10.0/24  # Management VLAN
+
+# Firewall configuration
+firewall_enabled: true
+firewall_rules:
+  # Allow SSH from management networks
+  - action: ACCEPT
+    source: 192.168.0.0/24,192.168.10.0/24
+    dest: 0.0.0.0/0
+    proto: tcp
+    dport: 22
+  # Allow Proxmox Web UI from management networks
+  - action: ACCEPT
+    source: 192.168.0.0/24,192.168.10.0/24
+    dest: 0.0.0.0/0
+    proto: tcp
+    dport: 8006
+  # Allow VM VNC console access
+  - action: ACCEPT
+    source: 192.168.0.0/24,192.168.10.0/24
+    dest: 0.0.0.0/0
+    proto: tcp
+    dport: 5900:5999
