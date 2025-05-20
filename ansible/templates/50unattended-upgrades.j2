@@ -1,0 +1,53 @@
+# ansible/templates/50unattended-upgrades.j2
+// Automatically upgrade packages from these origin patterns
+Unattended-Upgrade::Origins-Pattern {
+    // Archive or codename based matching:
+    // Match packages from the distro and the security repos
+    "origin=Debian,codename=${distro_codename},label=Debian";
+    "origin=Debian,codename=${distro_codename},label=Debian-Security";
+    "origin=Proxmox,codename=${distro_codename}";
+};
+
+// List of packages to not update (regexp are supported)
+Unattended-Upgrade::Package-Blacklist {
+{% if unattended_blacklist is defined %}
+{% for package in unattended_blacklist %}
+    "{{ package }}";
+{% endfor %}
+{% else %}
+//    "vim";
+//    "libc6";
+//    "libc6-dev";
+//    "libc6-i686";
+{% endif %}
+};
+
+// Send email to this address for problems or packages upgrades
+Unattended-Upgrade::Mail "{{ admin_email | default('root') }}";
+
+// Always send email when there are errors
+Unattended-Upgrade::MailOnlyOnError "{{ unattended_mail_only_on_error | default('true') }}";
+
+// Remove unused automatically installed kernel-related packages
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "{{ unattended_remove_unused_kernel | default('true') }}";
+
+// Do automatic removal of unused packages after the upgrade
+Unattended-Upgrade::Remove-Unused-Dependencies "{{ unattended_remove_unused_dependencies | default('true') }}";
+
+// Automatically reboot *WITHOUT CONFIRMATION* if
+//  the file /var/run/reboot-required is found after the upgrade
+Unattended-Upgrade::Automatic-Reboot "{{ unattended_automatic_reboot | default('false') }}";
+
+// If automatic reboot is enabled and needed, reboot at the specific
+// time instead of immediately. Default: "now"
+Unattended-Upgrade::Automatic-Reboot-Time "{{ unattended_automatic_reboot_time | default('02:00') }}";
+
+// Use apt bandwidth limit feature, this example limits the download
+// speed to 70kb/sec
+{% if unattended_download_limit is defined %}
+Acquire::http::Dl-Limit "{{ unattended_download_limit }}";
+{% endif %}
+
+// Enable logging to syslog for security compliance
+Unattended-Upgrade::SyslogEnable "true";
+Unattended-Upgrade::SyslogFacility "daemon";

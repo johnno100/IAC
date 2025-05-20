@@ -1,0 +1,49 @@
+# Create VM deployment playbook
+
+- name: Deploy VMs on Proxmox
+  hosts: proxmox_hosts
+  become: true
+  gather_facts: true
+  
+  tasks:
+    - name: Clone Ubuntu template for Management VM
+      shell: >
+        qm clone 9000 110 --name management
+        --target {{ inventory_hostname }}
+      args:
+        creates: /etc/pve/qemu-server/110.conf
+      when: "'management_vm' in group_names"
+      
+    - name: Configure Management VM resources
+      shell: >
+        qm set 110
+        --memory 4096
+        --cores 2
+        --net0 model=virtio,bridge=vmbr0.10
+        --ipconfig0 ip=192.168.10.10/24,gw=192.168.10.1
+      when: "'management_vm' in group_names"
+    
+    - name: Clone Ubuntu template for Vault VM
+      shell: >
+        qm clone 9000 120 --name vault
+        --target {{ inventory_hostname }}
+      args:
+        creates: /etc/pve/qemu-server/120.conf
+      when: "'vault_vm' in group_names"
+      
+    - name: Configure Vault VM resources
+      shell: >
+        qm set 120
+        --memory 4096
+        --cores 2
+        --net0 model=virtio,bridge=vmbr0.20
+        --ipconfig0 ip=192.168.20.10/24,gw=192.168.20.1
+      when: "'vault_vm' in group_names"
+    
+    - name: Start VMs
+      shell: qm start {{ item }}
+      loop:
+        - 110
+        - 120
+      ignore_errors: true
+      

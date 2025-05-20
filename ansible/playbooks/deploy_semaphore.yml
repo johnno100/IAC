@@ -1,0 +1,80 @@
+# Create Semaphore deployment playbook
+
+- name: Deploy Semaphore on Management VM
+  hosts: management_vm
+  become: true
+  
+  tasks:
+    - name: Create Semaphore directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /opt/semaphore
+        - /opt/semaphore/config
+        - /opt/semaphore/inventory
+        - /opt/semaphore/playbooks
+        - /opt/semaphore/keys
+    
+    - name: Create Docker Compose file
+      copy:
+        dest: /opt/semaphore/docker-compose.yml
+        content: |
+          version: '3'
+          
+          services:
+            postgres:
+              image: postgres:13
+              container_name: semaphore-postgres
+              environment:
+                POSTGRES_USER: semaphore
+                POSTGRES_PASSWORD: semaphore_password
+                POSTGRES_DB: semaphore
+              volumes:
+                - semaphore-postgres:/var/lib/postgresql/data
+              restart: unless-stopped
+              networks:
+                - semaphore-network
+          
+            semaphore:
+              image: semaphoreui/semaphore:latest
+              container_name: semaphore
+              ports:
+                - "3000:3000"
+              environment:
+                SEMAPHORE_DB_USER: semaphore
+                SEMAPHORE_DB_PASS: semaphore_password
+                SEMAPHORE_DB_HOST: postgres
+                SEMAPHORE_DB_PORT: 5432
+                SEMAPHORE_DB_DIALECT: postgres
+                SEMAPHORE_DB: semaphore
+                SEMAPHORE_PLAYBOOK_PATH: /tmp/semaphore/
+                SEMAPHORE_ADMIN_PASSWORD: adminpassword
+                SEMAPHORE_ADMIN_NAME: admin
+                SEMAPHORE_ADMIN_EMAIL: admin@localhost
+                SEMAPHORE_ADMIN: admin
+                SEMAPHORE_WEB_ROOT: http://localhost:3000
+              volumes:
+                - ./config:/etc/semaphore
+                - ~/.ssh:/root/.ssh:ro
+                - ./inventory:/tmp/semaphore/inventory
+                - ./playbooks:/tmp/semaphore/playbooks
+                - ./keys:/tmp/semaphore/keys
+              depends_on:
+                - postgres
+              restart: unless-stopped
+              networks:
+                - semaphore-network
+          
+          volumes:
+            semaphore-postgres:
+          
+          networks:
+            semaphore-network:
+        mode: '0644'
+    
+    - name: Deploy Semaphore
+      shell: cd /opt/semaphore && docker compose up -d
+      args:
+        creates: /opt/semaphore/config/semaphore_config.json
