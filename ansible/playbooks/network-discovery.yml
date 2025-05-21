@@ -1,7 +1,7 @@
 # ansible/playbooks/network-discovery.yml
 ---
 - name: Discover Network Configuration
-  hosts: all
+  hosts: production
   gather_facts: true
   tasks:
     - name: Gather network interface information
@@ -14,5 +14,6 @@
       local_action:
         module: copy
         content: "{{ network_facts | to_nice_yaml }}"
-        dest: "{{ playbook_dir }}/../inventories/current-state/{{ inventory_hostname }}-network.yml"
+        dest: "{{ playbook_dir }}/inventory/{{ inventory_hostname }}-network.yml"
         mode: '0644'
+        

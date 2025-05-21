@@ -33,10 +33,12 @@
       notify: Restart networking
       
     - name: Configure firewall
+      copy:
       template:
-        src: templates/pve-firewall.j2
+        src: templates/pve-firewall.j2ls 
         dest: /etc/pve/firewall/cluster.fw
         mode: '0644'
+      become: true
       notify: Restart pve-firewall
       
     - name: Enable firewall

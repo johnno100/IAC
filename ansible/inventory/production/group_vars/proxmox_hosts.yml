@@ -3,6 +3,7 @@
 # Proxmox global settings
 proxmox_timezone: "UTC"
 cluster_name: "ai-cluster"
+domain: "multiskilled.ai"
 
 # Network interfaces configuration
 network_interfaces:
@@ -65,11 +66,12 @@ vlans:
 # Storage configuration
 storage_disks:
   - sda
-  - sdb  # Add more disks as needed
+  - sdb
+  - sdc  # Add more disks as needed
 
 storage_lvms:
   - vg_name: pve
-    disk: sda2
+    disk: sdl2
   - vg_name: data
     disk: sdb  # Second disk for data
 

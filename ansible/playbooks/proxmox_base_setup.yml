@@ -54,7 +54,7 @@
       
     - name: Set system timezone
       timezone:
-        name: "{{ proxmox_timezone | default('UTC') }}"
+        name: "{{ proxmox_timezone | default('Australia/Perth') }}"
     
     - name: Set up SSH keys for root
       authorized_key:
