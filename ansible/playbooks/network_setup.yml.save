@@ -4,7 +4,7 @@
   hosts: proxmox_hosts
   become: true
   gather_facts: false
-
+  
   tasks:
     - name: Backup current network configuration
       copy:
@@ -12,7 +12,7 @@
         dest: /etc/network/interfaces.bak
         remote_src: yes
         mode: '0644'
-
+      
     - name: Configure network interfaces
       template:
         src: templates/interfaces.j2
@@ -23,7 +23,7 @@
         node_config: "{{ network_interfaces[inventory_hostname] }}"
       when: network_interfaces is defined and network_interfaces[inventory_hostname] is defined
       notify: Restart networking
- 
+      
     - name: Setup VLANs
       template:
         src: templates/vlan-interfaces.j2
@@ -32,21 +32,42 @@
       when: vlans is defined
       notify: Restart networking
       
+    - name: Create firewall configuration file if missing
+      file:
+        path: /etc/pve/firewall/cluster.fw
+
+- name: Create firewall configuration file if missing
+  file:
+    path: /etc/pve/firewall/cluster.fw
+    state: touch
+    mode: '0644'
+  become: yes        state: touch
+        mode: '0644'
+      become: yes
+
+    - name: Ensure correct ownership and permissions for Proxmox firewall config
+      file:
+        path: /etc/pve/firewall/cluster.fw
+        owner: root
+        group: root
+        mode: '0644'
+      become: yes
+
     - name: Configure firewall
       copy:
         src: templates/pve-firewall.j2
         dest: /etc/pve/firewall/cluster.fw
-        force: yes
+        mode: '0644'
       become: true
       notify: Restart pve-firewall
-       
+      
     - name: Enable firewall
-      command: pve-firewall restart
+      command: pve-firewall enable
       changed_when: false
-       
+      
     - name: Apply network changes (may disconnect)
       meta: flush_handlers
-       
+      
     - name: Wait for server to come back
       wait_for_connection:
         delay: 10

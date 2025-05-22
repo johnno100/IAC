@@ -1,0 +1,6 @@
+{
+    "ansible.python.interpreterPath": "/home/superdan/t440-deployment/IAC/.venv/bin/python",
+    "ansible.ansible.reuseTerminal": true,
+    "ansible.lightspeed.enabled": false,
+    "ansible.lightspeed.suggestions.enabled": false
+}

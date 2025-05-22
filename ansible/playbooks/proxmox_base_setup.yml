@@ -2,6 +2,8 @@
 ---
 - name: Configure Proxmox Base System
   hosts: proxmox_hosts
+  ansible_user: root
+  ansible_ssh_pass: 'we are winners'
   become: true
   gather_facts: true
   
@@ -54,13 +56,13 @@
       
     - name: Set system timezone
       timezone:
-        name: "{{ proxmox_timezone | default('UTC') }}"
+        name: "{{ proxmox_timezone | default('Australia/Perth') }}"
     
     - name: Set up SSH keys for root
       authorized_key:
         user: root
         state: present
-        key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+        key: "{{ lookup('file', '~/.ssh/id_ed25519.pub') }}"
         
   handlers:
     - name: Update apt cache

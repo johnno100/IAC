@@ -4,8 +4,14 @@
   hosts: proxmox_hosts
   become: true
   gather_facts: true
-  
+   
   tasks:
+    - name: Ensure parted is installed
+      apt:
+        name: parted
+        state: present
+      become: yes
+     
     - name: Get disk information
       parted:
         device: /dev/{{ item }}
@@ -18,21 +24,29 @@
     - name: Display disk information
       debug:
         var: disk_info
-        
+         
     - name: Create LVM physical volumes
       lvg:
         vg: "{{ item.vg_name }}"
         pvs: "/dev/{{ item.disk }}"
       loop: "{{ storage_lvms | default([]) }}"
       when: storage_lvms is defined
-      
+       
+    - name: Ensure /etc/pve/storage.cfg.d directory exists
+      file:
+        path: /etc/pve/storage.cfg.d
+        state: directory
+
     - name: Create Proxmox storage configurations
       template:
-        src: templates/storage-config.j2
-        dest: /etc/pve/storage.cfg.d/{{ item.name }}.cfg
-        mode: '0644'
-      loop: "{{ proxmox_storages | default([]) }}"
-      when: proxmox_storages is defined
+        src: "{{ playbook_dir }}/../templates/storage-config.j2"
+        dest: "/etc/pve/storage.cfg.d/{{ item.name }}.cfg"
+        mode: '0755'
+#        force: yes
+      become: yes
+      loop:
+        - { name: local-lvm, type: lvmthin, content: "images,rootdir", vgname: "pve", thinpool: "data" }
+        - { name: local-zfs, type: zfs, content: "...", vgname: "pve", thinpool: "..." }
       
     - name: Configure Proxmox datacenter storage
       shell: pvesh set /storage/{{ item.name }} --content {{ item.content }}

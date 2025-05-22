@@ -1,0 +1,42 @@
+# Path: templates/scan-containers.sh.j2
+#!/bin/bash
+# Script to scan all running containers for vulnerabilities using Trivy
+
+# Configuration
+LOG_DIR="/var/log/container-scans"
+DATE=$(date +%Y%m%d)
+RETENTION_DAYS={{ docker_security_scans.retention_days | default(30) }}
+
+# Ensure log directory exists
+mkdir -p "$LOG_DIR"
+
+echo "=== Container Security Scan - $(date) ==="
+echo "Scanning all running containers for vulnerabilities..."
+
+# Get list of running containers
+CONTAINERS=$(docker ps --format "{{.Image}}")
+
+# Scan each container
+for IMAGE in $CONTAINERS; do
+  echo "Scanning image: $IMAGE"
+  SAFE_NAME=$(echo "$IMAGE" | tr '/:' '--')
+  
+  # Run Trivy scan and save results
+  trivy image --no-progress --severity HIGH,CRITICAL --exit-code 0 "$IMAGE" > "$LOG_DIR/$SAFE_NAME-$DATE.txt"
+  
+  # Report critical vulnerabilities
+  CRITICALS=$(grep -c "CRITICAL" "$LOG_DIR/$SAFE_NAME-$DATE.txt" || echo "0")
+  HIGHS=$(grep -c "HIGH" "$LOG_DIR/$SAFE_NAME-$DATE.txt" || echo "0")
+  
+  echo "Results for $IMAGE: $CRITICALS critical, $HIGHS high vulnerabilities"
+done
+
+# Clean up old scan results
+if [ -n "$RETENTION_DAYS" ]; then
+  echo "Cleaning up scan results older than $RETENTION_DAYS days..."
+  find "$LOG_DIR" -name "*.txt" -mtime +$RETENTION_DAYS -delete
+fi
+
+echo "Scan completed at $(date)"
+echo "======================="
+exit 0
